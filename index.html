@@ -2,333 +2,506 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scribe | Audiobooks & Podcasts</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Scribe Titan</title>
+    
+    <!-- PWA & iOS Optimization -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#050505">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3844/3844721.png">
+    
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.5.1/mammoth.browser.min.js"></script>
+
     <style>
         :root {
-            --bg: #080808; --surface: #121212; --accent: #1db954;
-            --text: #ffffff; --text-dim: #b3b3b3;
-            --radius: 12px; --safe-top: env(safe-area-inset-top, 20px);
+            --bg: #050505; --surface: #121212; --surface-light: #1e1e1e;
+            --accent: #1db954; --text: #ffffff; --text-dim: #b3b3b3;
+            --safe-top: env(safe-area-inset-top, 20px);
+            --safe-bottom: env(safe-area-inset-bottom, 20px);
+            --radius: 16px;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-        body { background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, sans-serif; overflow: hidden; height: 100vh; }
+        body { 
+            background: var(--bg); color: var(--text); 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            overflow: hidden; height: 100dvh; display: flex; flex-direction: column;
+        }
 
-        /* Sidebar/Nav Mockup */
-        header { padding: calc(var(--safe-top) + 20px) 20px 10px; display: flex; justify-content: space-between; align-items: center; }
-        h1 { font-size: 24px; font-weight: 900; letter-spacing: -1px; }
+        /* Layout Architecture */
+        header { 
+            padding: calc(var(--safe-top) + 15px) 20px 10px; 
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 100;
+        }
+        h1 { font-size: 24px; font-weight: 900; letter-spacing: -1.5px; }
 
-        #app { height: calc(100vh - 180px); overflow-y: auto; padding: 10px; }
-        
-        /* Grid */
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
-        .book-card { background: var(--surface); padding: 12px; border-radius: var(--radius); cursor: pointer; transition: 0.2s; position: relative; }
-        .book-card:active { transform: scale(0.97); }
-        .book-cover { aspect-ratio: 1; background: linear-gradient(135deg, #282828, #121212); border-radius: 8px; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; font-size: 40px; color: var(--accent); }
-        .book-title { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .book-author { font-size: 12px; color: var(--text-dim); }
+        #app { 
+            flex: 1; overflow-y: auto; padding: 0 20px 150px; 
+            scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+        }
+
+        /* UI Components */
+        .search-container { position: sticky; top: 0; background: var(--bg); padding: 10px 0; z-index: 10; }
+        #search-input { 
+            width: 100%; padding: 14px; border-radius: 12px; 
+            background: var(--surface); border: 1px solid #222; color: #fff; 
+            font-size: 16px; outline: none;
+        }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; margin-top: 10px; }
+        .card { 
+            background: var(--surface); padding: 12px; border-radius: var(--radius); 
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            position: relative;
+        }
+        .card:active { transform: scale(0.95); }
+        .cover { 
+            aspect-ratio: 1; background: linear-gradient(145deg, #1e1e1e, #000); 
+            border-radius: 12px; margin-bottom: 10px; display: flex; 
+            align-items: center; justify-content: center; font-size: 40px; color: var(--accent);
+        }
+        .title { font-weight: 700; font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .delete-trigger { position: absolute; top: 6px; right: 6px; color: #ff4444; opacity: 0.6; }
 
         /* Full Player Overlay */
-        #player-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 1000; display: none; flex-direction: column; padding: 40px 24px; transition: transform 0.4s cubic-bezier(0.32, 1, 0.23, 1); transform: translateY(100%); }
-        #player-overlay.active { display: flex; transform: translateY(0); }
+        #player { 
+            position: fixed; inset: 0; background: var(--bg); z-index: 2000; 
+            display: none; flex-direction: column; 
+            padding: calc(var(--safe-top) + 20px) 24px var(--safe-bottom);
+            transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.3, 1, 0.2, 1);
+        }
+        #player.active { display: flex; transform: translateY(0); }
 
-        /* Live Captions */
-        .caption-container { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-        .caption-text { font-size: 28px; font-weight: 800; line-height: 1.3; color: var(--text-dim); transition: 0.2s; }
-        .caption-text .active-word { color: var(--accent); text-shadow: 0 0 20px rgba(29, 185, 84, 0.4); }
+        .caption-area { 
+            flex: 1; display: flex; align-items: center; justify-content: center; 
+            text-align: center; padding: 40px 0;
+        }
+        .caption-text { 
+            font-size: clamp(24px, 6vw, 36px); font-weight: 800; 
+            line-height: 1.4; color: var(--text-dim);
+        }
+        .active-word { color: var(--accent); text-shadow: 0 0 20px rgba(29, 185, 84, 0.4); }
 
         /* Controls */
-        .controls { display: flex; justify-content: center; align-items: center; gap: 30px; margin-bottom: 40px; }
-        .btn-ctrl { background: none; border: none; color: #fff; font-size: 32px; cursor: pointer; }
-        .btn-play { font-size: 64px; color: var(--accent); }
-        
-        .progress-wrap { width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-bottom: 20px; position: relative; }
-        #progress-bar { height: 100%; background: var(--accent); width: 0%; border-radius: 2px; }
+        .progress-bar-container { margin-bottom: 30px; }
+        .bar-track { width: 100%; height: 6px; background: #222; border-radius: 3px; position: relative; }
+        #bar-fill { height: 100%; background: var(--accent); width: 0%; border-radius: 3px; }
 
-        /* Import Section */
-        .fab { position: fixed; bottom: 100px; right: 20px; width: 56px; height: 56px; border-radius: 28px; background: var(--accent); color: #000; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 90; }
+        .main-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
+        .btn { background: none; border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .btn-skip { font-size: 32px; color: var(--text-dim); }
+        .btn-play { font-size: 80px; }
+        .btn-nav { font-size: 40px; }
 
-        #drop-zone { position: fixed; inset: 0; background: rgba(29, 185, 84, 0.2); backdrop-filter: blur(10px); z-index: 2000; display: none; align-items: center; justify-content: center; border: 4px dashed var(--accent); }
-        
-        .mini-player { position: fixed; bottom: 20px; left: 10px; right: 10px; height: 64px; background: var(--surface); border-radius: 12px; display: none; align-items: center; padding: 0 12px; z-index: 500; }
+        .settings-tray { 
+            background: var(--surface); border-radius: 20px; padding: 20px;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; color: var(--text-dim); }
+        select { background: none; border: none; color: var(--accent); font-weight: 800; font-size: 14px; outline: none; }
+
+        /* Mini Player */
+        .mini { 
+            position: fixed; bottom: calc(var(--safe-bottom) + 15px); left: 15px; right: 15px; 
+            height: 70px; background: rgba(30, 30, 30, 0.9); backdrop-filter: blur(20px); 
+            border-radius: 16px; display: none; align-items: center; padding: 0 15px; 
+            z-index: 1000; border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .fab { 
+            position: fixed; bottom: calc(var(--safe-bottom) + 100px); right: 20px; 
+            width: 64px; height: 64px; border-radius: 32px; background: var(--accent); 
+            color: #000; display: flex; align-items: center; justify-content: center; 
+            font-size: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 500;
+        }
+
+        #loader { 
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8); 
+            z-index: 5000; display: none; align-items: center; justify-content: center;
+            flex-direction: column; gap: 20px;
+        }
+        .spinner { width: 40px; height: 40px; border: 4px solid var(--accent); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
+    <div id="loader">
+        <div class="spinner"></div>
+        <p style="font-weight: 800; letter-spacing: 1px;">PROCESSING TITAN DATA</p>
+    </div>
+
     <header>
-        <h1>Scribe</h1>
-        <div style="display:flex; gap:15px;">
-            <button class="btn-ctrl" onclick="App.toggleSettings()"><i class="ph ph-sliders"></i></button>
+        <h1>SCRIBE <span style="color: var(--accent);">TITAN</span></h1>
+        <div style="display: flex; gap: 15px;">
+            <button class="btn" style="font-size: 24px;" onclick="App.export()"><i class="ph ph-share-network"></i></button>
+            <button class="btn" style="font-size: 24px; color: #ff4444;" onclick="App.clear()"><i class="ph ph-trash"></i></button>
         </div>
     </header>
 
     <div id="app">
-        <div class="grid" id="library-grid">
-            <!-- Books injected here -->
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Search your archive...">
         </div>
+        <div class="grid" id="library"></div>
     </div>
 
-    <!-- Hidden Inputs -->
-    <input type="file" id="file-input" hidden accept=".pdf,.docx,.txt">
-
-    <!-- Mini Player -->
-    <div class="mini-player" id="mini-player" onclick="UI.openFullPlayer()">
-        <div id="mini-info" style="flex:1;">
-            <div id="mini-title" style="font-weight:700; font-size:14px;">Nothing Playing</div>
-            <div id="mini-pos" style="font-size:11px; color:var(--text-dim);">0% completed</div>
+    <div class="mini" id="mini-player" onclick="UI.togglePlayer(true)">
+        <div style="width: 44px; height: 44px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
+            <i class="ph-fill ph-waveform" style="color: #000; font-size: 24px;"></i>
         </div>
-        <button class="btn-ctrl" id="mini-play-btn" onclick="event.stopPropagation(); Engine.toggle();">
-            <i class="ph-fill ph-play"></i>
+        <div style="flex: 1; overflow: hidden;">
+            <div id="mini-title" style="font-weight: 800; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Nothing Loaded</div>
+            <div id="mini-status" style="font-size: 11px; color: var(--text-dim);">Ready for synthesis</div>
+        </div>
+        <button class="btn" id="mini-play-btn" onclick="event.stopPropagation(); Engine.toggle();">
+            <i class="ph-fill ph-play" style="font-size: 28px;"></i>
         </button>
     </div>
 
-    <!-- Full Player -->
-    <div id="player-overlay">
-        <button class="btn-ctrl" onclick="UI.closeFullPlayer()"><i class="ph ph-caret-down"></i></button>
-        
-        <div class="caption-container">
-            <div id="live-caption" class="caption-text">Select a book to start listening...</div>
+    <div id="player">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <button class="btn" style="font-size: 32px;" onclick="UI.togglePlayer(false)"><i class="ph ph-caret-down"></i></button>
+            <div style="text-align: center;">
+                <p id="player-title" style="font-weight: 800; font-size: 14px; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></p>
+                <p style="font-size: 10px; color: var(--accent); font-weight: 700; letter-spacing: 2px;">SYNTHESIZING</p>
+            </div>
+            <button class="btn" style="font-size: 24px;" onclick="UI.sleepTimer()"><i class="ph ph-moon"></i></button>
         </div>
 
-        <div class="progress-wrap">
-            <div id="progress-bar"></div>
+        <div class="caption-area" id="swipe-area">
+            <div id="live-caption" class="caption-text">Start your session</div>
         </div>
 
-        <div class="controls">
-            <button class="btn-ctrl" onclick="Engine.seek(-1)"><i class="ph-fill ph-rewind-five"></i></button>
-            <button class="btn-ctrl btn-play" id="main-play-btn" onclick="Engine.toggle()"><i class="ph-fill ph-play-circle"></i></button>
-            <button class="btn-ctrl" onclick="Engine.seek(1)"><i class="ph-fill ph-fast-forward-five"></i></button>
+        <div class="progress-bar-container">
+            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 10px; font-weight: 700; color: var(--text-dim);">
+                <span id="pos-index">Sentence 0</span>
+                <span id="pos-percent">0%</span>
+            </div>
+            <div class="bar-track">
+                <div id="bar-fill"></div>
+            </div>
         </div>
 
-        <div style="display:flex; justify-content: space-around; padding-bottom: 20px;">
-            <select id="voice-select" style="background:var(--surface); color:#fff; border:none; padding:8px; border-radius:8px;"></select>
-            <button class="btn-ctrl" style="font-size:20px;" onclick="Engine.changeRate()"><span id="rate-label">1.0x</span></button>
+        <div class="main-controls">
+            <button class="btn btn-skip" onclick="Engine.skip(-5)"><i class="ph-fill ph-rewind-circle"></i></button>
+            <button class="btn btn-nav" onclick="Engine.prev()"><i class="ph-fill ph-skip-back-circle"></i></button>
+            <button class="btn btn-play" id="play-btn" onclick="Engine.toggle()"><i class="ph-fill ph-play-circle"></i></button>
+            <button class="btn btn-nav" onclick="Engine.next()"><i class="ph-fill ph-skip-forward-circle"></i></button>
+            <button class="btn btn-skip" onclick="Engine.skip(5)"><i class="ph-fill ph-fast-forward-circle"></i></button>
+        </div>
+
+        <div class="settings-tray">
+            <div class="setting-row">
+                <span>VOICE ARCHITECTURE</span>
+                <select id="voice-select"></select>
+            </div>
+            <div class="setting-row">
+                <span>TEMPO CONTROL</span>
+                <button class="btn" style="color: var(--accent); font-weight: 800;" onclick="Engine.tempo()"><span id="rate-ui">1.0x</span></button>
+            </div>
         </div>
     </div>
 
-    <div class="fab" onclick="document.getElementById('file-input').click()">
+    <div class="fab" onclick="document.getElementById('file-in').click()">
         <i class="ph ph-plus"></i>
     </div>
 
-    <div id="drop-zone"><h1>Drop to Import</h1></div>
+    <input type="file" id="file-in" hidden accept=".pdf,.docx,.txt">
 
 <script>
 /**
- * SCRIBE CORE ENGINE
- * Bimo's Logic Implementation
+ * SCRIBE TITAN v3.0
+ * Bimo's Optimized Engine
  */
 
 const State = {
-    library: [],
-    currentBook: null,
-    isPlaying: false,
-    utterance: null,
+    lib: [],
+    curr: null,
+    playing: false,
     sentences: [],
     cursor: 0,
-    rate: 1.0,
-    selectedVoice: null
+    tempo: 1.0,
+    voices: []
 };
 
 const App = {
     init: async () => {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
         
-        // Load library
-        const saved = await localforage.getItem('scribe_lib');
-        if(saved) State.library = saved;
-        
-        UI.renderLibrary();
-        UI.loadVoices();
+        State.lib = await localforage.getItem('titan_archive') || [];
+        UI.render();
 
-        // Bind File Inputs
-        document.getElementById('file-input').onchange = (e) => App.import(e.target.files[0]);
+        document.getElementById('file-in').onchange = (e) => App.ingest(e.target.files[0]);
+        document.getElementById('search-input').oninput = (e) => UI.render(e.target.value);
         
-        // Drag & Drop
-        window.ondragover = (e) => { e.preventDefault(); document.getElementById('drop-zone').style.display = 'flex'; };
-        document.getElementById('drop-zone').ondragleave = () => document.getElementById('drop-zone').style.display = 'none';
-        document.getElementById('drop-zone').ondrop = (e) => {
-            e.preventDefault();
-            document.getElementById('drop-zone').style.display = 'none';
-            App.import(e.dataTransfer.files[0]);
+        window.speechSynthesis.onvoiceschanged = () => {
+            State.voices = window.speechSynthesis.getVoices();
+            UI.setupVoices();
         };
 
-        window.speechSynthesis.onvoiceschanged = UI.loadVoices;
-    },
-
-    import: async (file) => {
-        if(!file) return;
-        let text = "";
-        const id = 'book_' + Date.now();
-
-        if(file.type === "application/pdf") {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-            for(let i=1; i<=pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const content = await page.getTextContent();
-                text += content.items.map(item => item.str).join(" ") + " ";
-            }
-        } else if(file.name.endsWith('.docx')) {
-            const arrayBuffer = await file.arrayBuffer();
-            const result = await mammoth.extractRawText({arrayBuffer});
-            text = result.value;
-        } else {
-            text = await file.text();
+        // iOS Control Center Integration
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.setActionHandler('play', () => Engine.toggle());
+            navigator.mediaSession.setActionHandler('pause', () => Engine.toggle());
+            navigator.mediaSession.setActionHandler('previoustrack', () => Engine.prev());
+            navigator.mediaSession.setActionHandler('nexttrack', () => Engine.next());
         }
 
-        const newBook = {
-            id,
-            title: file.name.replace(/\.[^/.]+$/, ""),
-            content: text,
-            cursor: 0,
-            added: Date.now()
-        };
+        UI.bindGestures();
+    },
 
-        State.library.push(newBook);
-        await localforage.setItem('scribe_lib', State.library);
-        UI.renderLibrary();
+    ingest: async (file) => {
+        if(!file) return;
+        document.getElementById('loader').style.display = 'flex';
+        let text = "";
+
+        try {
+            if(file.type === "application/pdf") {
+                const buffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument(buffer).promise;
+                for(let i=1; i<=pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    text += content.items.map(s => s.str).join(" ") + " ";
+                }
+            } else if(file.name.endsWith('.docx')) {
+                const buffer = await file.arrayBuffer();
+                const res = await mammoth.extractRawText({arrayBuffer: buffer});
+                text = res.value;
+            } else {
+                text = await file.text();
+            }
+
+            const doc = {
+                id: Date.now(),
+                title: file.name.replace(/\.[^/.]+$/, ""),
+                content: text,
+                cursor: 0
+            };
+
+            State.lib.unshift(doc);
+            await localforage.setItem('titan_archive', State.lib);
+            UI.render();
+        } catch (err) {
+            console.error("Ingest failure", err);
+        } finally {
+            document.getElementById('loader').style.display = 'none';
+        }
+    },
+
+    delete: async (id, e) => {
+        e.stopPropagation();
+        Haptics.impact();
+        if(!confirm("Erase from archive?")) return;
+        State.lib = State.lib.filter(d => d.id !== id);
+        await localforage.setItem('titan_archive', State.lib);
+        UI.render();
+    },
+
+    clear: async () => {
+        if(confirm("PERMANENT DATA PURGE?")) {
+            await localforage.clear();
+            location.reload();
+        }
+    },
+
+    export: () => {
+        const data = JSON.stringify(State.lib);
+        const blob = new Blob([data], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `titan_backup_${Date.now()}.json`;
+        a.click();
     }
 };
 
 const Engine = {
-    load: (bookId) => {
-        const book = State.library.find(b => b.id === bookId);
-        if(!book) return;
-        
-        State.currentBook = book;
-        // Split by punctuation but keep it for grammar pauses
-        State.sentences = book.content.match(/[^.!?]+[.!?]+/g) || [book.content];
-        State.cursor = book.cursor || 0;
-        
-        UI.openFullPlayer();
+    load: (id) => {
+        const doc = State.lib.find(d => d.id === id);
+        State.curr = doc;
+        // High-performance grammar splitting
+        State.sentences = doc.content.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [doc.content];
+        State.cursor = doc.cursor || 0;
+        UI.togglePlayer(true);
         Engine.play();
     },
 
     play: () => {
         window.speechSynthesis.cancel();
-        if(State.cursor >= State.sentences.length) return;
+        if(State.cursor >= State.sentences.length) {
+            State.playing = false;
+            UI.updateUI();
+            return;
+        }
 
-        const text = State.sentences[State.cursor];
+        const text = State.sentences[State.cursor].trim();
+        if(!text) { State.cursor++; Engine.play(); return; }
+
         const ut = new SpeechSynthesisUtterance(text);
-        
-        // Settings
-        const voices = window.speechSynthesis.getVoices();
-        ut.voice = voices[document.getElementById('voice-select').value] || voices[0];
-        ut.rate = State.rate;
-        ut.pitch = 1;
+        ut.voice = State.voices[document.getElementById('voice-select').value] || State.voices[0];
+        ut.rate = State.tempo;
 
-        // Visual Tracking
-        ut.onboundary = (event) => {
-            if (event.name === 'word') {
-                UI.highlightWord(text, event.charIndex, event.charLength);
-            }
+        ut.onboundary = (e) => {
+            if(e.name === 'word') UI.highlight(text, e.charIndex, e.charLength);
         };
 
         ut.onend = () => {
-            if(State.isPlaying) {
+            if(State.playing) {
                 State.cursor++;
-                Engine.saveProgress();
+                Engine.save();
                 Engine.play();
             }
         };
 
-        State.utterance = ut;
-        State.isPlaying = true;
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: State.curr.title,
+                artist: 'Scribe Titan Engine',
+                album: 'Local Reader'
+            });
+        }
+
         window.speechSynthesis.speak(ut);
-        UI.updatePlayState(true);
+        State.playing = true;
+        UI.updateUI();
     },
 
     toggle: () => {
-        if(State.isPlaying) {
+        Haptics.impact();
+        if(State.playing) {
             window.speechSynthesis.pause();
-            State.isPlaying = false;
+            State.playing = false;
         } else {
-            if(window.speechSynthesis.paused) {
-                window.speechSynthesis.resume();
-            } else {
-                Engine.play();
-            }
-            State.isPlaying = true;
+            window.speechSynthesis.paused ? window.speechSynthesis.resume() : Engine.play();
+            State.playing = true;
         }
-        UI.updatePlayState(State.isPlaying);
+        UI.updateUI();
     },
 
-    seek: (dir) => {
-        State.cursor = Math.max(0, Math.min(State.sentences.length - 1, State.cursor + dir));
-        Engine.play();
+    next: () => { State.cursor++; Engine.play(); },
+    prev: () => { State.cursor = Math.max(0, State.cursor - 1); Engine.play(); },
+    skip: (n) => { State.cursor = Math.max(0, Math.min(State.sentences.length-1, State.cursor + n)); Engine.play(); },
+
+    tempo: () => {
+        const steps = [1.0, 1.2, 1.5, 2.0, 0.8];
+        State.tempo = steps[(steps.indexOf(State.tempo) + 1) % steps.length];
+        document.getElementById('rate-ui').textContent = State.tempo + 'x';
+        if(State.playing) Engine.play();
     },
 
-    changeRate: () => {
-        const rates = [1.0, 1.25, 1.5, 2.0, 0.75];
-        let idx = rates.indexOf(State.rate);
-        State.rate = rates[(idx + 1) % rates.length];
-        document.getElementById('rate-label').textContent = State.rate + 'x';
-        if(State.isPlaying) Engine.play();
-    },
-
-    saveProgress: async () => {
-        const idx = State.library.findIndex(b => b.id === State.currentBook.id);
+    save: async () => {
+        const idx = State.lib.findIndex(d => d.id === State.curr.id);
         if(idx !== -1) {
-            State.library[idx].cursor = State.cursor;
-            await localforage.setItem('scribe_lib', State.library);
-            UI.updateProgress();
+            State.lib[idx].cursor = State.cursor;
+            await localforage.setItem('titan_archive', State.lib);
         }
     }
 };
 
 const UI = {
-    renderLibrary: () => {
-        const grid = document.getElementById('library-grid');
-        grid.innerHTML = State.library.map(book => `
-            <div class="book-card" onclick="Engine.load('${book.id}')">
-                <div class="book-cover"><i class="ph-fill ph-book-open"></i></div>
-                <div class="book-title">${book.title}</div>
-                <div class="book-author">Local Document</div>
+    render: (query = "") => {
+        const grid = document.getElementById('library');
+        const filtered = State.lib.filter(d => d.title.toLowerCase().includes(query.toLowerCase()));
+        
+        grid.innerHTML = filtered.map(doc => `
+            <div class="card" onclick="Engine.load(${doc.id})">
+                <button class="btn delete-trigger" onclick="App.delete(${doc.id}, event)"><i class="ph-bold ph-x"></i></button>
+                <div class="cover"><i class="ph-fill ph-file-text"></i></div>
+                <div class="title">${doc.title}</div>
             </div>
         `).join('');
     },
 
-    loadVoices: () => {
+    setupVoices: () => {
         const sel = document.getElementById('voice-select');
-        const voices = window.speechSynthesis.getVoices();
-        sel.innerHTML = voices.map((v, i) => `<option value="${i}">${v.name} (${v.lang})</option>`).join('');
+        sel.innerHTML = State.voices
+            .map((v, i) => `<option value="${i}">${v.name.split(' (')[0]}</option>`)
+            .join('');
     },
 
-    highlightWord: (text, charIndex, charLength) => {
-        const before = text.substring(0, charIndex);
-        const word = text.substring(charIndex, charIndex + charLength);
-        const after = text.substring(charIndex + charLength);
-        document.getElementById('live-caption').innerHTML = `${before}<span class="active-word">${word}</span>${after}`;
+    highlight: (text, idx, len) => {
+        const pre = text.substring(0, idx);
+        const word = text.substring(idx, idx + len);
+        const post = text.substring(idx + len);
+        document.getElementById('live-caption').innerHTML = `${pre}<span class="active-word">${word}</span>${post}`;
     },
 
-    updatePlayState: (playing) => {
-        const icon = playing ? 'ph-fill ph-pause-circle' : 'ph-fill ph-play-circle';
-        const mIcon = playing ? 'ph-fill ph-pause' : 'ph-fill ph-play';
-        document.getElementById('main-play-btn').innerHTML = `<i class="${icon}"></i>`;
+    updateUI: () => {
+        const icon = State.playing ? 'ph-fill ph-pause-circle' : 'ph-fill ph-play-circle';
+        const mIcon = State.playing ? 'ph-fill ph-pause' : 'ph-fill ph-play';
+        document.getElementById('play-btn').innerHTML = `<i class="${icon}"></i>`;
         document.getElementById('mini-play-btn').innerHTML = `<i class="${mIcon}"></i>`;
+        
+        const pct = Math.round((State.cursor / State.sentences.length) * 100) || 0;
+        document.getElementById('bar-fill').style.width = pct + '%';
+        document.getElementById('pos-index').textContent = `Sentence ${State.cursor}`;
+        document.getElementById('pos-percent').textContent = pct + '%';
+        
+        document.getElementById('mini-title').textContent = State.curr ? State.curr.title : 'Nothing Loaded';
+        document.getElementById('mini-status').textContent = `${pct}% completed`;
+        document.getElementById('player-title').textContent = State.curr?.title;
     },
 
-    updateProgress: () => {
-        const p = (State.cursor / State.sentences.length) * 100;
-        document.getElementById('progress-bar').style.width = p + '%';
-        document.getElementById('mini-pos').textContent = Math.round(p) + '% completed';
+    togglePlayer: (open) => {
+        const p = document.getElementById('player');
+        const m = document.getElementById('mini-player');
+        if(open) {
+            p.style.display = 'flex';
+            setTimeout(() => p.classList.add('active'), 10);
+            m.style.display = 'none';
+        } else {
+            p.classList.remove('active');
+            setTimeout(() => {
+                p.style.display = 'none';
+                m.style.display = 'flex';
+            }, 400);
+        }
     },
 
-    openFullPlayer: () => {
-        document.getElementById('player-overlay').classList.add('active');
-        document.getElementById('mini-player').style.display = 'none';
-        document.getElementById('mini-title').textContent = State.currentBook.title;
+    bindGestures: () => {
+        let startY = 0;
+        const area = document.getElementById('swipe-area');
+        area.addEventListener('touchstart', e => startY = e.touches[0].clientY);
+        area.addEventListener('touchend', e => {
+            const endY = e.changedTouches[0].clientY;
+            if(endY - startY > 100) UI.togglePlayer(false);
+        });
     },
 
-    closeFullPlayer: () => {
-        document.getElementById('player-overlay').classList.remove('active');
-        document.getElementById('mini-player').style.display = 'flex';
+    sleepTimer: () => {
+        Haptics.impact();
+        const mins = prompt("Minutes until sleep?", "15");
+        if(mins) {
+            alert(`Timer set for ${mins}m`);
+            setTimeout(() => {
+                window.speechSynthesis.cancel();
+                State.playing = false;
+                UI.updateUI();
+            }, mins * 60000);
+        }
     }
 };
+
+const Haptics = {
+    impact: () => { if(navigator.vibrate) navigator.vibrate(10); }
+};
+
+// Register PWA Service Worker for Offline access
+if ('serviceWorker' in navigator) {
+    const sw = `
+        const cacheName = 'titan-v3';
+        self.addEventListener('install', e => e.waitUntil(caches.open(cacheName).then(c => c.addAll(['.']))));
+        self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
+    `;
+    const blob = new Blob([sw], {type: 'text/javascript'});
+    navigator.serviceWorker.register(URL.createObjectURL(blob));
+}
 
 App.init();
 </script>
