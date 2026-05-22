@@ -3,19 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Scribe Titan | Offline Audiobook Suite</title>
+    <title>Scribe Titan v5.0</title>
     
-    <!-- PWA Web Capabilities & iOS Integration -->
+    <!-- PWA & Apple OS Capabilities -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#050505">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3844/3844721.png">
     
-    <!-- Libraries -->
+    <!-- Main External CDNs -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.5.1/mammoth.browser.min.js"></script>
+    <!-- Dynamic Lazy-Load Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <style>
         :root {
@@ -28,12 +32,23 @@
             --ease: cubic-bezier(0.23, 1, 0.32, 1);
         }
 
+        /* Sepia and High-Contrast Accessibility Theme Mappings */
+        body.sepia {
+            --bg: #f4ecd8; --surface: #e9dfc6; --surface-light: #dfd4b9;
+            --accent: #8b5a2b; --text: #433422; --text-dim: #5c4a37;
+        }
+        body.oled {
+            --bg: #000000; --surface: #0a0a0a; --surface-light: #121212;
+            --accent: #00ff66; --text: #ffffff; --text-dim: #7f7f7f;
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
         
         body { 
             background: var(--bg); color: var(--text); 
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
             overflow: hidden; height: 100dvh; display: flex; flex-direction: column;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         #ambient-glow {
@@ -42,7 +57,6 @@
             z-index: -1; pointer-events: none; transition: background-color 1.2s var(--ease);
         }
 
-        /* Layout */
         header { 
             padding: calc(var(--safe-top) + 15px) 24px 10px; 
             display: flex; justify-content: space-between; align-items: center; z-index: 100;
@@ -56,7 +70,6 @@
             scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
         }
 
-        /* Controls & Search */
         .search-box { 
             background: var(--surface); border-radius: var(--radius-md); padding: 14px 18px;
             display: flex; align-items: center; gap: 12px; margin: 10px 0 24px;
@@ -64,10 +77,8 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
         
-        #search-input { background: none; border: none; color: #fff; width: 100%; outline: none; font-size: 16px; }
-        #search-input::placeholder { color: #555; }
+        #search-input { background: none; border: none; color: var(--text); width: 100%; outline: none; font-size: 16px; }
 
-        /* Grid */
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 18px; }
         
         .card { 
@@ -84,10 +95,7 @@
             border-radius: 12px; margin-bottom: 12px; display: flex; align-items: center;
             justify-content: center; font-size: 38px; color: var(--accent);
             box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-            position: relative;
         }
-        
-        .card-cover img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
         
         .title { font-weight: 700; font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
         
@@ -95,11 +103,9 @@
             position: absolute; top: 6px; right: 6px; color: rgba(255, 68, 68, 0.7); 
             background: rgba(0,0,0,0.5); border-radius: 50%; border: none; cursor: pointer; 
             padding: 6px; z-index: 10; display: flex; align-items: center; justify-content: center;
-            transition: color 0.2s;
         }
-        .delete-trigger:hover { color: rgba(255, 68, 68, 1); }
 
-        /* Full Player Overlay */
+        /* Full Screen Interactive Player Panel */
         #player { 
             position: fixed; inset: 0; background: var(--bg); z-index: 2000; 
             display: none; flex-direction: column; 
@@ -111,43 +117,56 @@
 
         .viz-area { 
             flex: 1; display: flex; flex-direction: column; align-items: center; 
-            justify-content: center; overflow: hidden; margin-bottom: 24px;
+            justify-content: center; overflow: hidden; margin-bottom: 24px; position: relative;
         }
         
         #live-caption { 
-            font-size: clamp(20px, 6vw, 32px); font-weight: 800; 
-            text-align: center; line-height: 1.45; color: var(--text-dim); 
-            width: 100%; max-height: 100%; overflow-y: auto; padding: 15px;
-            scroll-behavior: smooth;
+            font-size: clamp(20px, 6.5vw, 32px); font-weight: 800; 
+            text-align: center; line-height: 1.5; color: var(--text-dim); 
+            width: 100%; max-height: 80%; overflow-y: auto; padding: 15px;
+            scroll-behavior: smooth; z-index: 20;
         }
-        
-        .active-word { color: #fff; text-shadow: 0 0 25px var(--accent); }
 
-        /* HUD Controller Container */
+        #focus-mask {
+            position: absolute; inset: 0; background: radial-gradient(circle, transparent 20%, var(--bg) 85%);
+            pointer-events: none; z-index: 10; display: none; opacity: 0.9;
+        }
+
+        #player.bionic-active #focus-mask { display: block; }
+        
+        .active-word { color: var(--accent); text-shadow: 0 0 25px var(--accent); }
+
+        /* Offscreen Canvas Node placeholder mapping */
+        #vocal-canvas {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 120px;
+            pointer-events: none; opacity: 0.35; z-index: 5;
+        }
+
+        /* HUD Controller Elements */
         .hud { 
             background: var(--surface); border-radius: var(--radius-lg); padding: 24px; 
             display: flex; flex-direction: column; gap: 20px;
             box-shadow: 0 -10px 40px rgba(0,0,0,0.6);
             border: 1px solid rgba(255,255,255,0.02);
+            z-index: 50;
         }
         
         .progress-container { display: flex; flex-direction: column; gap: 8px; }
         .progress-labels { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: var(--text-dim); }
         .progress-wrap { height: 6px; background: #222; border-radius: 3px; position: relative; overflow: hidden; cursor: pointer; }
-        #progress-fill { height: 100%; background: var(--accent); width: 0%; border-radius: 3px; transition: width 0.1s linear; }
+        #progress-fill { height: 100%; background: var(--accent); width: 0%; border-radius: 3px; }
         
         .main-controls { display: flex; justify-content: space-between; align-items: center; width: 100%; }
         
-        .btn { background: none; border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s var(--ease); }
+        .btn { background: none; border: none; color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s var(--ease); }
         .btn:active { transform: scale(0.9); opacity: 0.7; }
-        .btn-play { font-size: 78px; color: #fff; }
+        .btn-play { font-size: 78px; color: var(--text); }
         .btn-skip { font-size: 34px; color: var(--text-dim); }
         .btn-nav { font-size: 40px; }
 
         .settings-row { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
         .select-wrap { display: flex; gap: 10px; align-items: center; width: 65%; }
-        select { background: none; border: none; color: #fff; font-weight: 700; font-size: 13px; outline: none; width: 100%; cursor: pointer; }
-        select option { background: var(--surface); color: #fff; }
+        select { background: none; border: none; color: var(--text); font-weight: 700; font-size: 13px; outline: none; width: 100%; cursor: pointer; }
 
         /* Mini Player (Bottom Docked) */
         .mini { 
@@ -157,7 +176,6 @@
             z-index: 1000; border: 1px solid rgba(255,255,255,0.06);
             box-shadow: 0 16px 36px rgba(0,0,0,0.6);
             cursor: pointer;
-            transition: transform 0.3s var(--ease);
         }
 
         .fab { 
@@ -165,11 +183,10 @@
             width: 64px; height: 64px; border-radius: 32px; background: var(--accent); 
             color: #000; display: flex; align-items: center; justify-content: center; 
             font-size: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); z-index: 500;
-            cursor: pointer; transition: transform 0.2s var(--spring);
+            cursor: pointer;
         }
-        .fab:active { transform: scale(0.9); }
 
-        /* Continuity Sync Alert Banner */
+        /* Continuity Banner */
         #handoff-banner {
             position: fixed; top: var(--safe-top); left: 50%; transform: translate(-50%, -200%);
             width: calc(100% - 48px); max-width: 400px; background: var(--accent); color: #000;
@@ -181,18 +198,41 @@
         }
         #handoff-banner.visible { transform: translate(-50%, 15px); }
 
-        /* Loader Overlay System */
-        #loading-engine { 
-            position: fixed; inset: 0; background: var(--bg); z-index: 9999; 
-            display: none; align-items: center; justify-content: center; flex-direction: column; gap: 20px; 
+        /* Voice Recognition Command State Indicator */
+        #voice-command-hud {
+            position: absolute; top: calc(var(--safe-top) + 80px); right: 24px;
+            background: rgba(29, 185, 84, 0.15); border: 1px solid var(--accent);
+            color: var(--accent); font-size: 10px; font-weight: 900; padding: 6px 12px;
+            border-radius: 20px; text-transform: uppercase; letter-spacing: 1px;
+            display: none; animation: pulse 1s infinite alternate;
         }
-        
-        .pulse { width: 50px; height: 50px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { transform: scale(0.8); opacity: 0.4; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(0.8); opacity: 0.4; } }
 
-        /* Utility Styles */
-        .caption-bionic { font-weight: 400; }
-        .caption-bionic b { font-weight: 700; color: #fff; }
+        /* Option Sheet Modal Overlay */
+        #option-sheet {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 3000;
+            display: none; align-items: flex-end;
+        }
+        #option-sheet.active { display: flex; }
+        .sheet-panel {
+            width: 100%; background: var(--surface); border-radius: 24px 24px 0 0;
+            padding: 24px calc(24px + env(safe-area-inset-right)) calc(var(--safe-bottom) + 24px) calc(24px + env(safe-area-inset-left));
+            display: flex; flex-direction: column; gap: 16px;
+        }
+        .option-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 18px; background: var(--surface-light); border-radius: var(--radius-md);
+            font-size: 14px; font-weight: 700;
+        }
+        .toggle-btn {
+            width: 50px; height: 26px; background: #333; border-radius: 13px; position: relative;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .toggle-btn.on { background: var(--accent); }
+        .toggle-knob {
+            width: 22px; height: 22px; background: #fff; border-radius: 50%;
+            position: absolute; top: 2px; left: 2px; transition: transform 0.2s;
+        }
+        .toggle-btn.on .toggle-knob { transform: translateX(24px); }
     </style>
 </head>
 <body>
@@ -201,14 +241,14 @@
 
     <div id="loading-engine">
         <div class="pulse"></div>
-        <p style="font-weight: 900; letter-spacing: 2px; color: var(--accent); font-size: 13px;">TITAN COGNITIVE PARSING</p>
+        <p id="loading-message" style="font-weight: 900; letter-spacing: 2px; color: var(--accent); font-size: 13px; margin-top:10px;">TITAN COGNITIVE PARSING</p>
     </div>
 
-    <!-- Continuity / Proximity Simulation Banner -->
+    <!-- P2P Handoff Banner -->
     <div id="handoff-banner" onclick="Engine.acceptHandoff()">
         <div style="display: flex; align-items: center; gap: 8px;">
             <i class="ph-fill ph-device-mobile" style="font-size: 18px;"></i>
-            <span>DEVICE CONTINUITY DETECTED: RESUME?</span>
+            <span id="handoff-text">DEVICE CONTINUITY DETECTED: RESUME?</span>
         </div>
         <i class="ph-bold ph-caret-right"></i>
     </div>
@@ -216,6 +256,7 @@
     <header>
         <h1>SCRIBE <span>TITAN</span></h1>
         <div style="display: flex; gap: 15px;">
+            <button class="btn" style="font-size: 24px;" onclick="App.openP2PModal()"><i class="ph ph-cell-tower"></i></button>
             <button class="btn" style="font-size: 24px;" onclick="App.export()"><i class="ph ph-cloud-arrow-up"></i></button>
             <button class="btn" style="font-size: 24px; color: #ff4444;" onclick="App.clear()"><i class="ph ph-trash"></i></button>
         </div>
@@ -243,8 +284,10 @@
         </button>
     </div>
 
-    <!-- Full Screen Interactive Player -->
+    <!-- Full Screen Player -->
     <div id="player">
+        <div id="voice-command-hud"><i class="ph-fill ph-microphone"></i> Listening</div>
+        
         <header style="padding: 0; margin-bottom: 20px;">
             <button class="btn" style="font-size: 32px;" onclick="UI.toggleFull(false)"><i class="ph ph-caret-down"></i></button>
             <div style="text-align: center; max-width: 60%;">
@@ -255,7 +298,9 @@
         </header>
 
         <div class="viz-area" id="gesture-surface">
+            <div id="focus-mask"></div>
             <div id="live-caption">Mount a Document Segment</div>
+            <canvas id="vocal-canvas"></canvas>
         </div>
 
         <div class="hud">
@@ -289,51 +334,84 @@
         </div>
     </div>
 
-    <!-- Hidden Input Hooks -->
-    <div class="fab" onclick="document.getElementById('file-in').click()">
-        <i class="ph ph-plus"></i>
+    <!-- Options Bottom Sheet Panel -->
+    <div id="option-sheet" onclick="UI.closeOptionSheet()">
+        <div class="sheet-panel" onclick="event.stopPropagation()">
+            <div class="option-item">
+                <span>Bionic Reading Focus</span>
+                <div class="toggle-btn" id="bionic-toggle" onclick="UI.toggleSetting('bionic')"><div class="toggle-knob"></div></div>
+            </div>
+            <div class="option-item">
+                <span>Spatial Noise Ambiance</span>
+                <div class="toggle-btn" id="ambience-toggle" onclick="UI.toggleSetting('ambience')"><div class="toggle-knob"></div></div>
+            </div>
+            <div class="option-item">
+                <span>Device Rotation Pause</span>
+                <div class="toggle-btn" id="orientation-toggle" onclick="UI.toggleSetting('orientation')"><div class="toggle-knob"></div></div>
+            </div>
+            <div class="option-item">
+                <span>Smart Local Voice Command</span>
+                <div class="toggle-btn" id="voice-cmd-toggle" onclick="UI.toggleSetting('voiceCmd')"><div class="toggle-knob"></div></div>
+            </div>
+            <div class="option-item">
+                <span>Theme Mode</span>
+                <select id="theme-select" onchange="UI.changeTheme(this.value)" style="width:auto; color:var(--accent);">
+                    <option value="dark">Titan Dark</option>
+                    <option value="sepia">Parchment Sepia</option>
+                    <option value="oled">Pure OLED</option>
+                </select>
+            </div>
+            <div class="option-item" onclick="UI.sleepTimer()" style="cursor:pointer; justify-content:center; background:rgba(255,255,255,0.02);">
+                <span style="color:var(--accent);"><i class="ph-fill ph-timer"></i> Configure Sleep Timer</span>
+            </div>
+        </div>
     </div>
-    <input type="file" id="file-in" hidden accept=".pdf,.docx,.txt">
+
+    <input type="file" id="file-in" hidden accept=".pdf,.docx,.txt,.epub,.png,.jpg,.jpeg">
 
 <script>
 /**
  * SCRIBE TITAN V5.0 OMNI CODEBASE
- * Architecture: Bimo Code Core
+ * Professional, fully featured offline reader suite.
  */
 
 const State = {
     lib: [],
     active: null,
     playing: false,
-    phrases: [], // Parsed semantic textual phrases containing precise metadata
+    phrases: [],
     cursor: 0,
     tempo: 1.0,
     voices: [],
     settings: {
         bionic: false,
-        timerActive: false,
-        timerRemaining: 0
+        ambience: false,
+        orientation: false,
+        voiceCmd: false,
+        theme: 'dark'
     },
+    // Peer-to-Peer pairing references
+    peer: null,
+    peerConnection: null,
+    lastActiveTime: Date.now(),
     continuity: new BroadcastChannel('scribe_continuity')
 };
 
 /**
- * BACKGROUND EXECUTION DAEMON
- * Hijacks OS Audio prioritization systems via looped synthetic silence elements.
+ * BACKGROUND WEB AUDIO KEEPALIVE ENGINE
+ * Plays a sub-audible continuous wave + visibility hook watchdog to bypass iOS background suspension policies.
  */
 const BackgroundEngine = {
-    audio: null,
-    silentURI: 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==',
+    audioCtx: null,
+    oscillator: null,
+    gainNode: null,
+    ambienceOsc: null,
+    ambienceGain: null,
+    panner: null,
 
     init: () => {
-        BackgroundEngine.audio = new Audio(BackgroundEngine.silentURI);
-        BackgroundEngine.audio.loop = true;
-        
-        // Critical interface listeners to capture initial native gesture activation
         const unlock = () => {
-            BackgroundEngine.audio.play().then(() => {
-                console.log("⚡ OS Media Prioritizer Daemon Secured");
-            }).catch(() => {});
+            BackgroundEngine.unlockAudioPipeline();
             document.removeEventListener('touchstart', unlock);
             document.removeEventListener('click', unlock);
         };
@@ -341,6 +419,100 @@ const BackgroundEngine = {
         document.addEventListener('touchstart', unlock);
         document.addEventListener('click', unlock);
         BackgroundEngine.setupMediaSession();
+        BackgroundEngine.setupVisibilityWatchdog();
+    },
+
+    unlockAudioPipeline: () => {
+        try {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            BackgroundEngine.audioCtx = new AudioContextClass();
+            
+            // Sub-audible keeping CPU priority high
+            BackgroundEngine.oscillator = BackgroundEngine.audioCtx.createOscillator();
+            BackgroundEngine.gainNode = BackgroundEngine.audioCtx.createGain();
+            BackgroundEngine.gainNode.gain.setValueAtTime(0.0001, BackgroundEngine.audioCtx.currentTime);
+            
+            BackgroundEngine.oscillator.connect(BackgroundEngine.gainNode);
+            BackgroundEngine.gainNode.connect(BackgroundEngine.audioCtx.destination);
+            BackgroundEngine.oscillator.start(0);
+
+            // Ambient background Soundscape (Procedural Rain/Drone Simulator)
+            BackgroundEngine.setupAmbience();
+            BackgroundEngine.audioCtx.resume();
+            
+            // Start Visualizer Engine inside requestAnimationFrame loop
+            Visualizer.loop();
+            console.log("⚡ Audio Session Keep-Alive Primed");
+        } catch (e) {
+            console.warn("Background audio priming failed: ", e);
+        }
+    },
+
+    setupAmbience: () => {
+        if (!BackgroundEngine.audioCtx) return;
+        
+        // Dynamic procedural rain synthesis using Filtered Pink Noise approximation
+        const bufferSize = 2 * BackgroundEngine.audioCtx.sampleRate;
+        const noiseBuffer = BackgroundEngine.audioCtx.createBuffer(1, bufferSize, BackgroundEngine.audioCtx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        
+        let b0, b1, b2, b3, b4, b5, b6;
+        b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0;
+        
+        for (let i = 0; i < bufferSize; i++) {
+            const white = Math.random() * 2 - 1;
+            b0 = 0.99886 * b0 + white * 0.0555179;
+            b1 = 0.99332 * b1 + white * 0.0750759;
+            b2 = 0.96900 * b2 + white * 0.1538520;
+            b3 = 0.86650 * b3 + white * 0.3104856;
+            b4 = 0.55000 * b4 + white * 0.5329522;
+            b5 = -0.7616 * b5 - white * 0.0168980;
+            output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+            output[i] *= 0.11; // rescale
+            b6 = white * 0.115926;
+        }
+
+        const whiteNoiseNode = BackgroundEngine.audioCtx.createBufferSource();
+        whiteNoiseNode.buffer = noiseBuffer;
+        whiteNoiseNode.loop = true;
+
+        const lowpass = BackgroundEngine.audioCtx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = 800;
+
+        BackgroundEngine.ambienceGain = BackgroundEngine.audioCtx.createGain();
+        BackgroundEngine.ambienceGain.gain.setValueAtTime(0, BackgroundEngine.audioCtx.currentTime);
+
+        // Spatial Binaural panning simulator node
+        BackgroundEngine.panner = BackgroundEngine.audioCtx.createStereoPanner ? BackgroundEngine.audioCtx.createStereoPanner() : null;
+
+        whiteNoiseNode.connect(lowpass);
+        if (BackgroundEngine.panner) {
+            lowpass.connect(BackgroundEngine.panner);
+            BackgroundEngine.panner.connect(BackgroundEngine.ambienceGain);
+        } else {
+            lowpass.connect(BackgroundEngine.ambienceGain);
+        }
+        
+        BackgroundEngine.ambienceGain.connect(BackgroundEngine.audioCtx.destination);
+        whiteNoiseNode.start(0);
+    },
+
+    toggleAmbience: (active) => {
+        if (!BackgroundEngine.ambienceGain || !BackgroundEngine.audioCtx) return;
+        const targetGain = active ? 0.05 : 0;
+        BackgroundEngine.ambienceGain.gain.setTargetAtTime(targetGain, BackgroundEngine.audioCtx.currentTime, 1.5);
+        
+        // Slow oscillating binaural pan
+        if (active && BackgroundEngine.panner) {
+            const cycle = () => {
+                if (!State.settings.ambience) return;
+                const panVal = Math.sin(BackgroundEngine.audioCtx.currentTime * 0.25);
+                BackgroundEngine.panner.pan.setValueAtTime(panVal, BackgroundEngine.audioCtx.currentTime);
+                requestAnimationFrame(cycle);
+            };
+            cycle();
+        }
     },
 
     setupMediaSession: () => {
@@ -349,12 +521,29 @@ const BackgroundEngine = {
             navigator.mediaSession.setActionHandler('pause', () => Engine.toggle());
             navigator.mediaSession.setActionHandler('nexttrack', () => Engine.next());
             navigator.mediaSession.setActionHandler('previoustrack', () => Engine.prev());
-            
-            try {
-                navigator.mediaSession.setActionHandler('seekforward', () => Engine.skip(5));
-                navigator.mediaSession.setActionHandler('seekbackward', () => Engine.skip(-5));
-            } catch(e) {}
         }
+    },
+
+    setupVisibilityWatchdog: () => {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                if (BackgroundEngine.audioCtx && BackgroundEngine.audioCtx.state === 'suspended') {
+                    BackgroundEngine.audioCtx.resume();
+                }
+                // Check Contextual Auto-Rewind to help recover place after extended absence
+                Engine.checkAutoRewind();
+                
+                if (State.playing) {
+                    window.speechSynthesis.cancel();
+                    setTimeout(() => Engine.play(), 150);
+                }
+            } else {
+                State.lastActiveTime = Date.now();
+                if (State.playing) {
+                    window.speechSynthesis.resume();
+                }
+            }
+        });
     },
 
     syncLockscreen: (title, index, total) => {
@@ -363,7 +552,7 @@ const BackgroundEngine = {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: title,
                 artist: 'Scribe Titan v5.0',
-                album: `Phrase ${index}/${total} (${percentage}%)`,
+                album: `Sentence ${index}/${total} (${percentage}%)`,
                 artwork: [
                     { src: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png', sizes: '512x512', type: 'image/png' }
                 ]
@@ -377,20 +566,21 @@ const App = {
     init: async () => {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
         
-        // Initialize client database index mapping
         State.lib = await localforage.getItem('scribe_v5_db') || [];
+        State.settings = await localforage.getItem('scribe_v5_settings') || State.settings;
+        
         UI.refreshLib();
+        UI.applySettingsThemes();
 
         document.getElementById('file-in').onchange = (e) => App.ingest(e.target.files[0]);
         document.getElementById('search-input').oninput = (e) => UI.refreshLib(e.target.value);
         
-        // Native Speech engine configuration bindings
         window.speechSynthesis.onvoiceschanged = () => {
             State.voices = window.speechSynthesis.getVoices();
             UI.populateVoices();
         };
 
-        // Continuity/Proximity synchronization loop
+        // Continuity sync hook via P2P Broadcast
         State.continuity.onmessage = (e) => {
             if(e.data.type === 'HEARTBEAT' && (!State.active || !State.playing)) {
                 UI.triggerHandoff(e.data);
@@ -398,30 +588,32 @@ const App = {
         };
 
         BackgroundEngine.init();
+        App.setupOrientationSensor();
         UI.bindGestures();
     },
 
     ingest: async (file) => {
         if(!file) return;
-        document.getElementById('loading-engine').style.display = 'flex';
+        UI.showLoader("Parsing Document Spine...");
         let rawContent = "";
 
         try {
             if(file.type === "application/pdf") {
-                const buffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument(buffer).promise;
-                for(let i = 1; i <= pdf.numPages; i++){
-                    const page = await pdf.getPage(i);
-                    const text = await page.getTextContent();
-                    rawContent += text.items.map(s => s.str).join(" ") + " ";
-                }
+                rawContent = await App.parsePDF(file);
             } else if(file.name.endsWith('.docx')) {
                 const buffer = await file.arrayBuffer();
                 const res = await mammoth.extractRawText({arrayBuffer: buffer});
                 rawContent = res.value;
+            } else if(file.name.endsWith('.epub')) {
+                rawContent = await App.parseEPUB(file);
+            } else if(file.type.startsWith('image/')) {
+                rawContent = await App.parseImageOCR(file);
             } else {
                 rawContent = await file.text();
             }
+
+            // Technical Markdown Stripper pipeline
+            rawContent = App.cleanMarkdown(rawContent);
 
             const doc = {
                 id: Date.now(),
@@ -434,36 +626,168 @@ const App = {
             await localforage.setItem('scribe_v5_db', State.lib);
             UI.refreshLib();
         } catch (err) {
-            alert("Database Error: Ingestion sequence interrupted.");
+            console.error(err);
+            alert("Database Error: Ingestion failed.");
         } finally {
-            document.getElementById('loading-engine').style.display = 'none';
+            UI.hideLoader();
         }
     },
 
-    delete: async (id, e) => {
-        e.stopPropagation();
-        Haptics.feedback();
-        if(!confirm("Erase document from local catalog?")) return;
-        State.lib = State.lib.filter(d => d.id !== id);
-        await localforage.setItem('scribe_v5_db', State.lib);
-        UI.refreshLib();
+    cleanMarkdown: (text) => {
+        return text
+            .replace(/(\*\*|__)(.*?)\1/g, '$2') // Strip bold
+            .replace(/(\*|_)(.*?)\1/g, '$2')   // Strip italics
+            .replace(/`([^`]+)`/g, '$1')         // Strip backticks inline
+            .replace(/```[\s\S]*?```/g, '')       // Wipe code blocks
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Clean links
+            .replace(/#+\s+(.*)/g, '$1');        // Strip headings
     },
 
-    export: async () => {
-        const data = JSON.stringify(State.lib);
-        const blob = new Blob([data], {type: 'application/json'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `scribe_titan_backup.json`;
-        a.click();
-    },
+    parsePDF: async (file) => {
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(buffer).promise;
+        let content = "";
+        let emptyPages = 0;
 
-    clear: async () => {
-        Haptics.feedback();
-        if(confirm("DANGER: WIPE THE ENTIRE LOCAL LIBRARY?")) {
-            await localforage.clear();
-            location.reload();
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(s => s.str).join(" ");
+            
+            if (pageText.trim().length === 0) {
+                emptyPages++;
+            }
+            content += pageText + " ";
         }
+
+        // OCR Fallback Trigger if document contains empty/scanned pages
+        if (emptyPages > 0 && confirm(`This PDF contains ${emptyPages} scanned/unmapped pages. Trigger absolute WebAssembly OCR now?`)) {
+            content = await App.parsePDFWithOCR(pdf);
+        }
+        return content;
+    },
+
+    parsePDFWithOCR: async (pdf) => {
+        let text = "";
+        const worker = await Tesseract.createWorker();
+        UI.showLoader("Loading Neural OCR engines...");
+        
+        for (let i = 1; i <= pdf.numPages; i++) {
+            UI.showLoader(`Scanning page ${i} / ${pdf.numPages}`);
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2.0 });
+            
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            const dataUrl = canvas.toDataURL();
+            
+            const { data: { text: ocrText } } = await worker.recognize(dataUrl);
+            text += ocrText + " ";
+        }
+        await worker.terminate();
+        return text;
+    },
+
+    parseEPUB: async (file) => {
+        const buffer = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(buffer);
+        
+        // Locate OPF Spine definition
+        const containerFile = await zip.file("META-INF/container.xml").async("text");
+        const parser = new DOMParser();
+        const containerDoc = parser.parseFromString(containerFile, "text/xml");
+        const opfPath = containerDoc.querySelector("rootfile").getAttribute("full-path");
+        const opfDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
+
+        const opfFile = await zip.file(opfPath).async("text");
+        const opfDoc = parser.parseFromString(opfFile, "text/xml");
+        const spineItems = Array.from(opfDoc.querySelectorAll("spine itemref"));
+        const manifestItems = Array.from(opfDoc.querySelectorAll("manifest item"));
+
+        let aggregateText = "";
+        UI.showLoader("Extracting Epub Spine...");
+
+        for (let item of spineItems) {
+            const idref = item.getAttribute("idref");
+            const manifestItem = manifestItems.find(i => i.getAttribute("id") === idref);
+            if (manifestItem) {
+                const relativeHref = manifestItem.getAttribute("href");
+                const fullHref = opfDir + relativeHref;
+                const htmlFile = await zip.file(fullHref).async("text");
+                const htmlDoc = parser.parseFromString(htmlFile, "text/html");
+                aggregateText += htmlDoc.body.innerText + "\n\n";
+            }
+        }
+        return aggregateText;
+    },
+
+    parseImageOCR: async (file) => {
+        UI.showLoader("Analyzing optical layout...");
+        const worker = await Tesseract.createWorker();
+        const dataUrl = URL.createObjectURL(file);
+        const { data: { text } } = await worker.recognize(dataUrl);
+        await worker.terminate();
+        return text;
+    },
+
+    setupOrientationSensor: () => {
+        window.addEventListener('deviceorientation', (e) => {
+            if (!State.settings.orientation) return;
+            // Face Down Detection Logic (tilt values mapping)
+            const isFaceDown = (e.beta > 170 || e.beta < -170) && Math.abs(e.gamma) < 15;
+            if (isFaceDown && State.playing) {
+                Engine.toggle(); // Auto Pause
+                Haptics.feedback();
+            } else if (!isFaceDown && !State.playing && State.active && window.speechSynthesis.paused) {
+                Engine.toggle(); // Resume playback on lift
+            }
+        });
+    },
+
+    openP2PModal: () => {
+        const action = prompt("SCRIBE OMNI PEER-TO-PEER DATA CHANNEL\n\n1. Type 'HOST' to share library offline\n2. Type 'CONNECT' to sync from nearby device");
+        if (!action) return;
+        if (action.toUpperCase() === 'HOST') {
+            App.hostP2PSession();
+        } else if (action.toUpperCase() === 'CONNECT') {
+            App.joinP2PSession();
+        }
+    },
+
+    hostP2PSession: () => {
+        State.peer = new Peer('titan_p2p_' + Math.floor(Math.random() * 9000 + 1000));
+        State.peer.on('open', (id) => {
+            prompt("Offline sync tunnel active. Share this identity with target client:", id);
+        });
+        State.peer.on('connection', (conn) => {
+            State.peerConnection = conn;
+            conn.on('open', () => {
+                conn.send({ type: 'SYNC_DB', data: State.lib });
+                alert("Omni sync initiated: Database shared over WebRTC.");
+            });
+        });
+    },
+
+    joinP2PSession: () => {
+        const hostId = prompt("Enter the host device's identity code:");
+        if (!hostId) return;
+        State.peer = new Peer();
+        State.peer.on('open', () => {
+            const conn = State.peer.connect(hostId);
+            State.peerConnection = conn;
+            conn.on('data', async (payload) => {
+                if (payload.type === 'SYNC_DB') {
+                    State.lib = payload.data;
+                    await localforage.setItem('scribe_v5_db', State.lib);
+                    UI.refreshLib();
+                    alert("Sync Successful: Library database fully synchronized.");
+                }
+            });
+        });
     }
 };
 
@@ -473,15 +797,23 @@ const Engine = {
         if(!doc) return;
         State.active = doc;
         
-        // Intelligent semantic parsing: Breaks strings into cadence phrases preserving pauses
-        const rawPhrases = doc.text.match(/[^,;:.!?\n]+[,;:.!?\n]*/g) || [doc.text];
+        // Clausal Boundary Analysis (Regex splitting paragraphs preserving grammar delimiters)
+        const rawPhrases = doc.text.match(/[^,;:.!?\n—]+[,;:.!?\n—]*/g) || [doc.text];
         State.phrases = rawPhrases.map(p => {
-            let delay = 120; // base cadence delay (ms)
+            let delay = 120; // base cadence wait time (ms)
             const trimmed = p.trim();
-            if (trimmed.endsWith('.') || trimmed.endsWith('!') || trimmed.endsWith('?')) delay = 500;
+            // Variable pauses dynamically assigned based on punctuation
+            if (trimmed.endsWith('.') || trimmed.endsWith('!') || trimmed.endsWith('?')) delay = 550;
             else if (trimmed.endsWith(',') || trimmed.endsWith(';')) delay = 250;
-            else if (p.includes('\n')) delay = 800;
-            return { text: trimmed, delay };
+            else if (trimmed.endsWith('—')) delay = 350;
+            else if (p.includes('\n')) delay = 850;
+            
+            // dialogue identification logic (quoted sections)
+            const isDialogue = trimmed.startsWith('"') || trimmed.startsWith('“') || trimmed.startsWith('\'');
+            // parenthetical scanning
+            const isParenthetical = trimmed.startsWith('(') || trimmed.startsWith('[') || trimmed.endsWith(')') || trimmed.endsWith(']');
+            
+            return { text: trimmed, delay, isDialogue, isParenthetical };
         }).filter(p => p.text.length > 0);
 
         State.cursor = doc.cursor || 0;
@@ -501,8 +833,36 @@ const Engine = {
 
         const phrase = State.phrases[State.cursor];
         const utterance = new SpeechSynthesisUtterance(phrase.text);
-        utterance.voice = State.voices[document.getElementById('voice-select').value] || State.voices[0];
-        utterance.rate = State.tempo;
+        
+        // Dynamic Speech Synthesis Variables Setup
+        let utteranceVoice = State.voices[document.getElementById('voice-select').value] || State.voices[0];
+        let utterancePitch = 1.0;
+        let utteranceRate = State.tempo;
+        let utteranceVolume = 1.0;
+
+        // Dual-Voice turn taking handler
+        if (phrase.isDialogue && State.voices.length > 1) {
+            // Attempt to shift to different voice class if dialogic context detected
+            const preferredVoice = State.voices.find(v => v.lang.startsWith('en') && v.name !== utteranceVoice.name);
+            if (preferredVoice) utteranceVoice = preferredVoice;
+        }
+
+        // Parenthetical whispering logic
+        if (phrase.isParenthetical) {
+            utteranceVolume = 0.35;
+            utteranceRate = State.tempo * 0.9;
+            utterancePitch = 0.8;
+        }
+
+        // Intelligibility speed pitch-correction
+        if (utteranceRate > 2.0) {
+            utterancePitch = 0.85; // Lower pitch slightly to optimize audio clarity
+        }
+
+        utterance.voice = utteranceVoice;
+        utterance.pitch = utterancePitch;
+        utterance.rate = utteranceRate;
+        utterance.volume = utteranceVolume;
 
         utterance.onboundary = (e) => {
             if(e.name === 'word') UI.syncCaption(phrase.text, e.charIndex, e.charLength);
@@ -510,7 +870,7 @@ const Engine = {
 
         utterance.onend = () => {
             if(State.playing) {
-                // Thread-keepalive execution timeout sequence to mimic real grammar boundaries
+                // Precise clausal delay timeout loop
                 setTimeout(() => {
                     State.cursor++;
                     Engine.persist();
@@ -519,8 +879,9 @@ const Engine = {
             }
         };
 
-        if (BackgroundEngine.audio && BackgroundEngine.audio.paused) {
-            BackgroundEngine.audio.play().catch(() => {});
+        // Haptic Cadence transition indicators
+        if (State.cursor > 0) {
+            Haptics.cadence();
         }
 
         window.speechSynthesis.speak(utterance);
@@ -528,13 +889,12 @@ const Engine = {
         UI.updatePlayer();
         BackgroundEngine.syncLockscreen(State.active.title, State.cursor, State.phrases.length);
         
-        // Continuous Proximity Heartbeat Broadcast
+        // Continuous Heartbeat for Device Handoff API mapping
         State.continuity.postMessage({
             type: 'HEARTBEAT',
             id: State.active.id,
             title: State.active.title,
-            cursor: State.cursor,
-            origin: window.location.href
+            cursor: State.cursor
         });
     },
 
@@ -542,7 +902,6 @@ const Engine = {
         Haptics.feedback();
         if(State.playing) {
             window.speechSynthesis.cancel();
-            if (BackgroundEngine.audio) BackgroundEngine.audio.pause();
             State.playing = false;
         } else {
             Engine.play();
@@ -589,6 +948,17 @@ const Engine = {
         State.tempo = steps[(steps.indexOf(State.tempo) + 1) % steps.length];
         document.getElementById('tempo-ui').textContent = State.tempo + 'x';
         if(State.playing) Engine.play();
+    },
+
+    checkAutoRewind: () => {
+        const secondsIdle = (Date.now() - State.lastActiveTime) / 1000;
+        const hoursIdle = secondsIdle / 3600;
+        if (hoursIdle > 0.5) {
+            // Rewind 2 sentences per hour of offline time to restore reading context
+            const rewindAmount = Math.max(1, Math.floor(hoursIdle * 2));
+            State.cursor = Math.max(0, State.cursor - rewindAmount);
+            console.log(`Contextual Auto-Rewind applied: Returned ${rewindAmount} phrases.`);
+        }
     },
 
     persist: async () => {
@@ -642,7 +1012,7 @@ const UI = {
             }).join(" ");
             parent.innerHTML = `<span class="caption-bionic">${bionicHTML}</span>`;
         } else {
-            // Audio Session Boundary Word Highlight
+            // Boundary Segment Word Highlighting
             const pre = text.substring(0, start);
             const word = text.substring(start, start + len);
             const post = text.substring(start + len);
@@ -662,7 +1032,7 @@ const UI = {
         document.getElementById('player-percent-text').textContent = pct + '%';
         
         document.getElementById('mini-title').textContent = State.active?.title || 'System Idle';
-        document.getElementById('mini-status').textContent = State.playing ? 'Active Stream' : 'Suspended';
+        document.getElementById('mini-status').textContent = State.playing ? 'Active Pipeline' : 'Suspended';
         document.getElementById('player-book-title').textContent = State.active?.title;
     },
 
@@ -688,13 +1058,52 @@ const UI = {
     },
 
     openOptionSheet: () => {
-        const option = confirm("TITAN CONTROL SHEET\n\nPress OK to toggle Bionic Reading Mode\nPress Cancel to configure Sleep Timer");
-        if (option) {
-            State.settings.bionic = !State.settings.bionic;
-            alert(`Bionic Reading Mode: ${State.settings.bionic ? "ENABLED" : "DISABLED"}`);
+        document.getElementById('option-sheet').classList.add('active');
+    },
+
+    closeOptionSheet: () => {
+        document.getElementById('option-sheet').classList.remove('active');
+    },
+
+    toggleSetting: (setting) => {
+        State.settings[setting] = !State.settings[setting];
+        const btn = document.getElementById(`${setting}-toggle`);
+        if (State.settings[setting]) {
+            btn.classList.add('on');
         } else {
-            UI.sleepTimer();
+            btn.classList.remove('on');
         }
+        
+        // Process setting changes immediately
+        if (setting === 'bionic') {
+            document.getElementById('player').classList.toggle('bionic-active', State.settings[setting]);
+        }
+        if (setting === 'ambience') {
+            BackgroundEngine.toggleAmbience(State.settings[setting]);
+        }
+        if (setting === 'voiceCmd') {
+            LocalVoiceCommand.toggle(State.settings[setting]);
+        }
+        
+        localforage.setItem('scribe_v5_settings', State.settings);
+    },
+
+    applySettingsThemes: () => {
+        // Hydrate toggle switch visuals on start
+        Object.keys(State.settings).forEach(k => {
+            const el = document.getElementById(`${k}-toggle`);
+            if (el && State.settings[k]) el.classList.add('on');
+        });
+        document.getElementById('player').classList.toggle('bionic-active', State.settings.bionic);
+        UI.changeTheme(State.settings.theme || 'dark');
+        document.getElementById('theme-select').value = State.settings.theme || 'dark';
+    },
+
+    changeTheme: (theme) => {
+        document.body.className = '';
+        if (theme !== 'dark') document.body.classList.add(theme);
+        State.settings.theme = theme;
+        localforage.setItem('scribe_v5_settings', State.settings);
     },
 
     bindGestures: () => {
@@ -707,29 +1116,132 @@ const UI = {
         }, {passive: true});
     },
 
+    showLoader: (msg) => {
+        document.getElementById('loading-message').textContent = msg;
+        document.getElementById('loading-engine').style.display = 'flex';
+    },
+
+    hideLoader: () => {
+        document.getElementById('loading-engine').style.display = 'none';
+    },
+
     sleepTimer: () => {
         Haptics.feedback();
         const mins = prompt("SLEEP TIMEOUT CORE (minutes):", "30");
         if(mins && !isNaN(mins)) {
             setTimeout(() => {
                 window.speechSynthesis.cancel();
-                if (BackgroundEngine.audio) BackgroundEngine.audio.pause();
                 State.playing = false;
                 UI.updatePlayer();
-                if (State.active) {
-                    BackgroundEngine.syncLockscreen(State.active.title, State.cursor, State.phrases.length);
-                }
             }, mins * 60000);
-            alert(`System Sleep initiated: Execution shutdown in ${mins} minutes.`);
+            alert(`Execution shutdown structured in ${mins} minutes.`);
+        }
+    }
+};
+
+/**
+ * OFFSCREEN VECTOR VISUALIZER
+ * Non-main thread simulation of vocal modulation mapping.
+ */
+const Visualizer = {
+    loop: () => {
+        const canvas = document.getElementById('vocal-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+
+        const animate = () => {
+            if (!State.playing) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                requestAnimationFrame(animate);
+                return;
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--accent');
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+
+            const slices = 40;
+            const sliceWidth = canvas.width / slices;
+            let x = 0;
+
+            for (let i = 0; i < slices; i++) {
+                // Dynamic programmatic wave approximation simulating voice amplitude
+                const mod = Math.sin(i * 0.15 + Date.now() * 0.012) * Math.cos(i * 0.05 + Date.now() * 0.008);
+                const y = (canvas.height / 2) + (mod * (canvas.height * 0.35));
+                
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+                
+                x += sliceWidth;
+            }
+            ctx.stroke();
+            requestAnimationFrame(animate);
+        };
+        animate();
+    }
+};
+
+/**
+ * OFFLINE COGNITIVE LOCAL VOICE GRAMMAR
+ * Hooks into WebKit speech recognition pipeline to capture offline controller parameters.
+ */
+const LocalVoiceCommand = {
+    recognition: null,
+
+    init: () => {
+        const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognitionClass) return;
+
+        LocalVoiceCommand.recognition = new SpeechRecognitionClass();
+        LocalVoiceCommand.recognition.continuous = true;
+        LocalVoiceCommand.recognition.interimResults = false;
+        LocalVoiceCommand.recognition.lang = 'en-US';
+
+        LocalVoiceCommand.recognition.onresult = (e) => {
+            const command = e.results[e.results.length - 1][0].transcript.toLowerCase().trim();
+            console.log("Speech Command Scanned: ", command);
+            
+            if (command.includes("titan pause") || command.includes("pause")) {
+                if (State.playing) Engine.toggle();
+            } else if (command.includes("titan play") || command.includes("play")) {
+                if (!State.playing) Engine.toggle();
+            } else if (command.includes("titan skip") || command.includes("skip")) {
+                Engine.skip(5);
+            } else if (command.includes("titan back") || command.includes("back")) {
+                Engine.skip(-5);
+            }
+        };
+
+        LocalVoiceCommand.recognition.onerror = (e) => {
+            console.warn("Speech Recognition Error: ", e.error);
+        };
+    },
+
+    toggle: (active) => {
+        if (!LocalVoiceCommand.recognition) LocalVoiceCommand.init();
+        if (!LocalVoiceCommand.recognition) return;
+
+        if (active) {
+            try {
+                LocalVoiceCommand.recognition.start();
+                document.getElementById('voice-command-hud').style.display = 'block';
+            } catch (e) {}
+        } else {
+            try {
+                LocalVoiceCommand.recognition.stop();
+                document.getElementById('voice-command-hud').style.display = 'none';
+            } catch (e) {}
         }
     }
 };
 
 const Haptics = {
-    feedback: () => { if(navigator.vibrate) navigator.vibrate(12); }
+    feedback: () => { if(navigator.vibrate) navigator.vibrate(12); },
+    cadence: () => { if(navigator.vibrate) navigator.vibrate([15]); }
 };
 
-// Dynamic client-side Service Worker mapping for absolute offline support
 if('serviceWorker' in navigator) {
     const sw = `self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));`;
     const blob = new Blob([sw], {type: 'text/javascript'});
