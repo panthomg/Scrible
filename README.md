@@ -1,5 +1,5 @@
 # 📖 Scribe: The Local Audiobook Titan
-
+https://panthomg.github.io/Scrible/
 **Scribe** is a high-performance, privacy-focused, browser-based reader that transforms your local PDF, DOCX, and TXT files into a Spotify-like audiobook experience. Built for operators who value offline capability and a premium UI.
 
 ![Scribe UI Concept](https://img.shields.io/badge/UI-Spotify--Inspired-1DB954?style=for-the-badge)
