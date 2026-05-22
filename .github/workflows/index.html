@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Scribe Titan</title>
+    <title>Scribe Titan | Offline Audiobook Suite</title>
     
-    <!-- PWA & Apple OS Optimization -->
+    <!-- PWA Web Capabilities & iOS Integration -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#050505">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3844/3844721.png">
     
-    <!-- Core External Dependencies -->
+    <!-- Libraries -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
@@ -19,141 +19,180 @@
 
     <style>
         :root {
-            --bg: #050505; --surface: #111111; --surface-light: #1e1e1e;
-            --accent: #1db954; --text: #ffffff; --text-dim: #888;
+            --bg: #050505; --surface: #121212; --surface-light: #1e1e1e;
+            --accent: #1db954; --text: #ffffff; --text-dim: #a0a0a0;
             --safe-top: env(safe-area-inset-top, 20px);
             --safe-bottom: env(safe-area-inset-bottom, 20px);
-            --spring: cubic-bezier(0.4, 0, 0.2, 1);
-            --radius: 16px;
+            --radius-lg: 24px; --radius-md: 16px;
+            --spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            --ease: cubic-bezier(0.23, 1, 0.32, 1);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
         
         body { 
             background: var(--bg); color: var(--text); 
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
             overflow: hidden; height: 100dvh; display: flex; flex-direction: column;
         }
 
-        /* Ambient background glow mapping */
         #ambient-glow {
             position: fixed; top: -50%; left: -50%; width: 200%; height: 200%;
-            background: radial-gradient(circle, rgba(29, 185, 84, 0.05) 0%, transparent 70%);
-            z-index: -1; pointer-events: none; transition: background-color 1s ease;
+            background: radial-gradient(circle, rgba(29, 185, 84, 0.04) 0%, transparent 65%);
+            z-index: -1; pointer-events: none; transition: background-color 1.2s var(--ease);
         }
 
+        /* Layout */
         header { 
-            padding: calc(var(--safe-top) + 15px) 20px 10px; 
+            padding: calc(var(--safe-top) + 15px) 24px 10px; 
             display: flex; justify-content: space-between; align-items: center; z-index: 100;
         }
         
         h1 { font-size: 24px; font-weight: 900; letter-spacing: -1.5px; }
+        h1 span { color: var(--accent); }
 
         #app { 
-            flex: 1; overflow-y: auto; padding: 0 20px 180px; 
+            flex: 1; overflow-y: auto; padding: 0 24px 180px; 
             scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
         }
 
+        /* Controls & Search */
         .search-box { 
-            background: var(--surface); border-radius: 14px; padding: 12px 16px;
-            display: flex; align-items: center; gap: 10px; margin: 10px 0 20px;
-            border: 1px solid rgba(255,255,255,0.05);
+            background: var(--surface); border-radius: var(--radius-md); padding: 14px 18px;
+            display: flex; align-items: center; gap: 12px; margin: 10px 0 24px;
+            border: 1px solid rgba(255,255,255,0.03);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
         
         #search-input { background: none; border: none; color: #fff; width: 100%; outline: none; font-size: 16px; }
+        #search-input::placeholder { color: #555; }
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; }
+        /* Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 18px; }
         
         .card { 
-            background: var(--surface); border-radius: 20px; padding: 14px;
-            transition: 0.3s var(--spring); position: relative; overflow: hidden;
+            background: var(--surface); border-radius: var(--radius-md); padding: 14px;
+            transition: transform 0.25s var(--spring), background-color 0.2s; position: relative; overflow: hidden;
             border: 1px solid rgba(255,255,255,0.02);
+            cursor: pointer;
         }
         
-        .card:active { transform: scale(0.96); background: #1a1a1a; }
+        .card:active { transform: scale(0.95); background: var(--surface-light); }
         
         .card-cover { 
-            aspect-ratio: 1; background: linear-gradient(135deg, #1e1e1e, #050505);
+            aspect-ratio: 1; background: linear-gradient(135deg, #1a1a1a, #030303);
             border-radius: 12px; margin-bottom: 12px; display: flex; align-items: center;
-            justify-content: center; font-size: 36px; color: var(--accent);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            justify-content: center; font-size: 38px; color: var(--accent);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            position: relative;
         }
         
-        .title { font-weight: 700; font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .card-cover img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
+        
+        .title { font-weight: 700; font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
         
         .delete-trigger { 
-            position: absolute; top: 6px; right: 6px; color: #ff4444; opacity: 0.6; 
-            background: none; border: none; cursor: pointer; padding: 4px; z-index: 10;
+            position: absolute; top: 6px; right: 6px; color: rgba(255, 68, 68, 0.7); 
+            background: rgba(0,0,0,0.5); border-radius: 50%; border: none; cursor: pointer; 
+            padding: 6px; z-index: 10; display: flex; align-items: center; justify-content: center;
+            transition: color 0.2s;
         }
+        .delete-trigger:hover { color: rgba(255, 68, 68, 1); }
 
-        /* Full Player Overlay and responsive control layers */
+        /* Full Player Overlay */
         #player { 
             position: fixed; inset: 0; background: var(--bg); z-index: 2000; 
             display: none; flex-direction: column; 
             padding: calc(var(--safe-top) + 20px) 24px calc(var(--safe-bottom) + 20px);
-            transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.3, 1, 0.2, 1);
+            transform: translateY(100%); transition: transform 0.45s cubic-bezier(0.19, 1, 0.22, 1);
         }
         
         #player.active { display: flex; transform: translateY(0); }
 
         .viz-area { 
             flex: 1; display: flex; flex-direction: column; align-items: center; 
-            justify-content: center; overflow: hidden; margin-bottom: 20px;
+            justify-content: center; overflow: hidden; margin-bottom: 24px;
         }
         
         #live-caption { 
-            font-size: clamp(22px, 6.5vw, 36px); font-weight: 800; 
-            text-align: center; line-height: 1.4; color: var(--text-dim); 
-            width: 100%; max-height: 100%; overflow-y: auto; padding: 10px;
+            font-size: clamp(20px, 6vw, 32px); font-weight: 800; 
+            text-align: center; line-height: 1.45; color: var(--text-dim); 
+            width: 100%; max-height: 100%; overflow-y: auto; padding: 15px;
+            scroll-behavior: smooth;
         }
         
-        .active-word { color: #fff; text-shadow: 0 0 30px var(--accent); }
+        .active-word { color: #fff; text-shadow: 0 0 25px var(--accent); }
 
-        /* Control UI Engine Elements */
+        /* HUD Controller Container */
         .hud { 
-            background: var(--surface); border-radius: 28px; padding: 22px; 
-            display: flex; flex-direction: column; gap: 18px;
-            box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+            background: var(--surface); border-radius: var(--radius-lg); padding: 24px; 
+            display: flex; flex-direction: column; gap: 20px;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.02);
         }
         
-        .progress-wrap { height: 6px; background: #222; border-radius: 3px; position: relative; overflow: hidden; }
-        
-        #progress-fill { height: 100%; background: var(--accent); width: 0%; border-radius: 3px; transition: 0.15s linear; }
+        .progress-container { display: flex; flex-direction: column; gap: 8px; }
+        .progress-labels { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: var(--text-dim); }
+        .progress-wrap { height: 6px; background: #222; border-radius: 3px; position: relative; overflow: hidden; cursor: pointer; }
+        #progress-fill { height: 100%; background: var(--accent); width: 0%; border-radius: 3px; transition: width 0.1s linear; }
         
         .main-controls { display: flex; justify-content: space-between; align-items: center; width: 100%; }
         
-        .btn { background: none; border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-        
+        .btn { background: none; border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s var(--ease); }
         .btn:active { transform: scale(0.9); opacity: 0.7; }
-        
-        .btn-play { font-size: 76px; color: #fff; }
-        
-        .btn-skip { font-size: 32px; color: var(--text-dim); }
+        .btn-play { font-size: 78px; color: #fff; }
+        .btn-skip { font-size: 34px; color: var(--text-dim); }
+        .btn-nav { font-size: 40px; }
+
+        .settings-row { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
+        .select-wrap { display: flex; gap: 10px; align-items: center; width: 65%; }
+        select { background: none; border: none; color: #fff; font-weight: 700; font-size: 13px; outline: none; width: 100%; cursor: pointer; }
+        select option { background: var(--surface); color: #fff; }
 
         /* Mini Player (Bottom Docked) */
         .mini { 
             position: fixed; bottom: calc(var(--safe-bottom) + 15px); left: 15px; right: 15px; 
-            height: 72px; background: rgba(20,20,20,0.95); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
-            border-radius: 20px; display: none; align-items: center; padding: 0 15px; 
-            z-index: 1000; border: 1px solid rgba(255,255,255,0.05);
+            height: 72px; background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+            border-radius: 20px; display: none; align-items: center; padding: 0 16px; 
+            z-index: 1000; border: 1px solid rgba(255,255,255,0.06);
             box-shadow: 0 16px 36px rgba(0,0,0,0.6);
+            cursor: pointer;
+            transition: transform 0.3s var(--ease);
         }
 
         .fab { 
-            position: fixed; bottom: calc(var(--safe-bottom) + 100px); right: 20px; 
+            position: fixed; bottom: calc(var(--safe-bottom) + 100px); right: 24px; 
             width: 64px; height: 64px; border-radius: 32px; background: var(--accent); 
             color: #000; display: flex; align-items: center; justify-content: center; 
             font-size: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); z-index: 500;
+            cursor: pointer; transition: transform 0.2s var(--spring);
         }
+        .fab:active { transform: scale(0.9); }
 
-        /* Loading Overlay Layer */
+        /* Continuity Sync Alert Banner */
+        #handoff-banner {
+            position: fixed; top: var(--safe-top); left: 50%; transform: translate(-50%, -200%);
+            width: calc(100% - 48px); max-width: 400px; background: var(--accent); color: #000;
+            border-radius: 30px; display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 20px; z-index: 5000; font-weight: 800; font-size: 13px;
+            box-shadow: 0 10px 30px rgba(29, 185, 84, 0.4);
+            transition: transform 0.4s var(--spring);
+            cursor: pointer;
+        }
+        #handoff-banner.visible { transform: translate(-50%, 15px); }
+
+        /* Loader Overlay System */
         #loading-engine { 
             position: fixed; inset: 0; background: var(--bg); z-index: 9999; 
             display: none; align-items: center; justify-content: center; flex-direction: column; gap: 20px; 
         }
         
-        .pulse { width: 60px; height: 60px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(0.8); opacity: 0.5; } }
+        .pulse { width: 50px; height: 50px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(0.8); opacity: 0.4; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(0.8); opacity: 0.4; } }
+
+        /* Utility Styles */
+        .caption-bionic { font-weight: 400; }
+        .caption-bionic b { font-weight: 700; color: #fff; }
     </style>
 </head>
 <body>
@@ -162,11 +201,20 @@
 
     <div id="loading-engine">
         <div class="pulse"></div>
-        <p style="font-weight: 900; letter-spacing: 2px; color: var(--accent); font-size: 14px;">TITAN ENGINE LOADING</p>
+        <p style="font-weight: 900; letter-spacing: 2px; color: var(--accent); font-size: 13px;">TITAN COGNITIVE PARSING</p>
+    </div>
+
+    <!-- Continuity / Proximity Simulation Banner -->
+    <div id="handoff-banner" onclick="Engine.acceptHandoff()">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <i class="ph-fill ph-device-mobile" style="font-size: 18px;"></i>
+            <span>DEVICE CONTINUITY DETECTED: RESUME?</span>
+        </div>
+        <i class="ph-bold ph-caret-right"></i>
     </div>
 
     <header>
-        <h1>SCRIBE <span style="color: var(--accent);">TITAN</span></h1>
+        <h1>SCRIBE <span>TITAN</span></h1>
         <div style="display: flex; gap: 15px;">
             <button class="btn" style="font-size: 24px;" onclick="App.export()"><i class="ph ph-cloud-arrow-up"></i></button>
             <button class="btn" style="font-size: 24px; color: #ff4444;" onclick="App.clear()"><i class="ph ph-trash"></i></button>
@@ -181,54 +229,58 @@
         <div class="grid" id="library"></div>
     </div>
 
-    <!-- Mini player module mirroring Beam architecture -->
+    <!-- Mini Player Component -->
     <div class="mini" id="mini-player" onclick="UI.toggleFull(true)">
         <div style="width: 44px; height: 44px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
             <i class="ph-fill ph-waveform" style="color: #000; font-size: 24px;"></i>
         </div>
         <div style="flex: 1; overflow: hidden;">
             <div id="mini-title" style="font-weight: 800; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Offline Sync Ready</div>
-            <div id="mini-status" style="font-size: 11px; color: var(--text-dim);">Background Daemon Off</div>
+            <div id="mini-status" style="font-size: 11px; color: var(--text-dim);">Background Daemon Standby</div>
         </div>
         <button class="btn" id="mini-play-btn" onclick="event.stopPropagation(); Engine.toggle();" style="padding: 10px;">
             <i class="ph-fill ph-play" style="font-size: 28px; color: var(--accent);"></i>
         </button>
     </div>
 
-    <!-- Full player panel -->
+    <!-- Full Screen Interactive Player -->
     <div id="player">
         <header style="padding: 0; margin-bottom: 20px;">
             <button class="btn" style="font-size: 32px;" onclick="UI.toggleFull(false)"><i class="ph ph-caret-down"></i></button>
             <div style="text-align: center; max-width: 60%;">
                 <p id="player-book-title" style="font-weight: 900; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></p>
-                <div style="display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 2px;">
-                    <span id="player-pos-text" style="font-size: 10px; color: var(--accent); font-weight: 800; letter-spacing: 1px;">SENTENCE 0</span>
-                </div>
+                <p style="font-size: 10px; color: var(--accent); font-weight: 800; letter-spacing: 1px; margin-top: 2px;">AUDIOPHILIC PIPELINE</p>
             </div>
-            <button class="btn" style="font-size: 24px;" onclick="UI.sleepTimer()"><i class="ph ph-moon"></i></button>
+            <button class="btn" style="font-size: 24px;" onclick="UI.openOptionSheet()"><i class="ph ph-sliders"></i></button>
         </header>
 
         <div class="viz-area" id="gesture-surface">
-            <div id="live-caption">Ready for processing</div>
+            <div id="live-caption">Mount a Document Segment</div>
         </div>
 
         <div class="hud">
-            <div class="progress-wrap">
-                <div id="progress-fill"></div>
+            <div class="progress-container">
+                <div class="progress-labels">
+                    <span id="player-pos-text">PHRASE 0 / 0</span>
+                    <span id="player-percent-text">0%</span>
+                </div>
+                <div class="progress-wrap" id="scrub-bar" onclick="Engine.scrub(event)">
+                    <div id="progress-fill"></div>
+                </div>
             </div>
 
             <div class="main-controls">
-                <button class="btn btn-skip" onclick="Engine.skip(-5)"><i class="ph-fill ph-rewind-circle"></i></button>
-                <button class="btn" style="font-size: 40px;" onclick="Engine.prev()"><i class="ph-fill ph-skip-back-circle"></i></button>
+                <button class="btn btn-skip" onclick="Engine.skip(-10)"><i class="ph-fill ph-rewind-circle"></i></button>
+                <button class="btn btn-nav" onclick="Engine.prev()"><i class="ph-fill ph-skip-back-circle"></i></button>
                 <button class="btn btn-play" id="play-btn" onclick="Engine.toggle()"><i class="ph-fill ph-play-circle"></i></button>
-                <button class="btn" style="font-size: 40px;" onclick="Engine.next()"><i class="ph-fill ph-skip-forward-circle"></i></button>
-                <button class="btn btn-skip" onclick="Engine.skip(5)"><i class="ph-fill ph-fast-forward-circle"></i></button>
+                <button class="btn btn-nav" onclick="Engine.next()"><i class="ph-fill ph-skip-forward-circle"></i></button>
+                <button class="btn btn-skip" onclick="Engine.skip(10)"><i class="ph-fill ph-fast-forward-circle"></i></button>
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
-                <div style="display: flex; gap: 10px; align-items: center; width: 65%;">
+            <div class="settings-row">
+                <div class="select-wrap">
                     <i class="ph-fill ph-speaker-high" style="color: var(--accent); font-size: 18px;"></i>
-                    <select id="voice-select" style="background: none; border: none; color: #fff; font-weight: 700; font-size: 12px; outline: none; width: 100%;"></select>
+                    <select id="voice-select" onchange="Engine.updateVoice()"></select>
                 </div>
                 <button class="btn" onclick="Engine.cycleTempo()" style="font-weight: 900; color: var(--accent); border: 1px solid #222; padding: 6px 14px; border-radius: 12px; font-size: 13px;">
                     <span id="tempo-ui">1.0x</span>
@@ -237,30 +289,37 @@
         </div>
     </div>
 
+    <!-- Hidden Input Hooks -->
     <div class="fab" onclick="document.getElementById('file-in').click()">
         <i class="ph ph-plus"></i>
     </div>
-
     <input type="file" id="file-in" hidden accept=".pdf,.docx,.txt">
 
 <script>
 /**
- * TITAN ENGINE v4.0 — ARCHITECTURE BY BIMO
+ * SCRIBE TITAN V5.0 OMNI CODEBASE
+ * Architecture: Bimo Code Core
  */
 
 const State = {
     lib: [],
     active: null,
     playing: false,
-    sentences: [],
+    phrases: [], // Parsed semantic textual phrases containing precise metadata
     cursor: 0,
     tempo: 1.0,
-    voices: []
+    voices: [],
+    settings: {
+        bionic: false,
+        timerActive: false,
+        timerRemaining: 0
+    },
+    continuity: new BroadcastChannel('scribe_continuity')
 };
 
 /**
- * BACKGROUND AUDIO PERSISTENCE LAYER
- * Locks priority of execution thread for OS Lockscreen and background play state.
+ * BACKGROUND EXECUTION DAEMON
+ * Hijacks OS Audio prioritization systems via looped synthetic silence elements.
  */
 const BackgroundEngine = {
     audio: null,
@@ -270,41 +329,41 @@ const BackgroundEngine = {
         BackgroundEngine.audio = new Audio(BackgroundEngine.silentURI);
         BackgroundEngine.audio.loop = true;
         
-        // Touch interaction is mandatory on iOS Safari to initialize Audio engine context.
+        // Critical interface listeners to capture initial native gesture activation
         const unlock = () => {
             BackgroundEngine.audio.play().then(() => {
-                console.log("⚡ Background Keep-Alive Daemon Activated");
-            }).catch(e => console.warn("Waiting for browser user gesture...", e));
-            
+                console.log("⚡ OS Media Prioritizer Daemon Secured");
+            }).catch(() => {});
             document.removeEventListener('touchstart', unlock);
             document.removeEventListener('click', unlock);
         };
 
         document.addEventListener('touchstart', unlock);
         document.addEventListener('click', unlock);
-        
-        BackgroundEngine.setupMediaControls();
+        BackgroundEngine.setupMediaSession();
     },
 
-    setupMediaControls: () => {
+    setupMediaSession: () => {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.setActionHandler('play', () => Engine.toggle());
             navigator.mediaSession.setActionHandler('pause', () => Engine.toggle());
             navigator.mediaSession.setActionHandler('nexttrack', () => Engine.next());
             navigator.mediaSession.setActionHandler('previoustrack', () => Engine.prev());
             
-            // Standard seek logic matching Spotify audio control panels
-            try { navigator.mediaSession.setActionHandler('seekforward', () => Engine.skip(5)); } catch(e){}
-            try { navigator.mediaSession.setActionHandler('seekbackward', () => Engine.skip(-5)); } catch(e){}
+            try {
+                navigator.mediaSession.setActionHandler('seekforward', () => Engine.skip(5));
+                navigator.mediaSession.setActionHandler('seekbackward', () => Engine.skip(-5));
+            } catch(e) {}
         }
     },
 
-    syncLockScreen: (title, progress) => {
+    syncLockscreen: (title, index, total) => {
         if ('mediaSession' in navigator) {
+            const percentage = Math.round((index / total) * 100) || 0;
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: title,
-                artist: 'Scribe Titan Engine',
-                album: `Sentence ${progress}`,
+                artist: 'Scribe Titan v5.0',
+                album: `Phrase ${index}/${total} (${percentage}%)`,
                 artwork: [
                     { src: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png', sizes: '512x512', type: 'image/png' }
                 ]
@@ -318,17 +377,24 @@ const App = {
     init: async () => {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
         
-        // Restore Local database records
-        State.lib = await localforage.getItem('scribe_v4_db') || [];
+        // Initialize client database index mapping
+        State.lib = await localforage.getItem('scribe_v5_db') || [];
         UI.refreshLib();
 
         document.getElementById('file-in').onchange = (e) => App.ingest(e.target.files[0]);
         document.getElementById('search-input').oninput = (e) => UI.refreshLib(e.target.value);
         
-        // Web Speech Synth registration
+        // Native Speech engine configuration bindings
         window.speechSynthesis.onvoiceschanged = () => {
             State.voices = window.speechSynthesis.getVoices();
             UI.populateVoices();
+        };
+
+        // Continuity/Proximity synchronization loop
+        State.continuity.onmessage = (e) => {
+            if(e.data.type === 'HEARTBEAT' && (!State.active || !State.playing)) {
+                UI.triggerHandoff(e.data);
+            }
         };
 
         BackgroundEngine.init();
@@ -338,7 +404,7 @@ const App = {
     ingest: async (file) => {
         if(!file) return;
         document.getElementById('loading-engine').style.display = 'flex';
-        let content = "";
+        let rawContent = "";
 
         try {
             if(file.type === "application/pdf") {
@@ -346,29 +412,29 @@ const App = {
                 const pdf = await pdfjsLib.getDocument(buffer).promise;
                 for(let i = 1; i <= pdf.numPages; i++){
                     const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    content += textContent.items.map(s => s.str).join(" ") + " ";
+                    const text = await page.getTextContent();
+                    rawContent += text.items.map(s => s.str).join(" ") + " ";
                 }
             } else if(file.name.endsWith('.docx')) {
                 const buffer = await file.arrayBuffer();
                 const res = await mammoth.extractRawText({arrayBuffer: buffer});
-                content = res.value;
+                rawContent = res.value;
             } else {
-                content = await file.text();
+                rawContent = await file.text();
             }
 
             const doc = {
                 id: Date.now(),
                 title: file.name.replace(/\.[^/.]+$/, ""),
-                text: content,
+                text: rawContent,
                 cursor: 0
             };
 
             State.lib.unshift(doc);
-            await localforage.setItem('scribe_v4_db', State.lib);
+            await localforage.setItem('scribe_v5_db', State.lib);
             UI.refreshLib();
         } catch (err) {
-            alert("Parser Interruption: Ingest process collapsed under resource constraint.");
+            alert("Database Error: Ingestion sequence interrupted.");
         } finally {
             document.getElementById('loading-engine').style.display = 'none';
         }
@@ -377,9 +443,9 @@ const App = {
     delete: async (id, e) => {
         e.stopPropagation();
         Haptics.feedback();
-        if(!confirm("Purge selected record from client database?")) return;
+        if(!confirm("Erase document from local catalog?")) return;
         State.lib = State.lib.filter(d => d.id !== id);
-        await localforage.setItem('scribe_v4_db', State.lib);
+        await localforage.setItem('scribe_v5_db', State.lib);
         UI.refreshLib();
     },
 
@@ -388,13 +454,13 @@ const App = {
         const blob = new Blob([data], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = `scribe_titan_db_${Date.now()}.json`;
+        a.href = url; a.download = `scribe_titan_backup.json`;
         a.click();
     },
 
     clear: async () => {
         Haptics.feedback();
-        if(confirm("ALERT: Delete all indexed document segments inside database?")) {
+        if(confirm("DANGER: WIPE THE ENTIRE LOCAL LIBRARY?")) {
             await localforage.clear();
             location.reload();
         }
@@ -407,9 +473,19 @@ const Engine = {
         if(!doc) return;
         State.active = doc;
         
-        // High Performance context boundary separator
-        State.sentences = doc.text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [doc.text];
+        // Intelligent semantic parsing: Breaks strings into cadence phrases preserving pauses
+        const rawPhrases = doc.text.match(/[^,;:.!?\n]+[,;:.!?\n]*/g) || [doc.text];
+        State.phrases = rawPhrases.map(p => {
+            let delay = 120; // base cadence delay (ms)
+            const trimmed = p.trim();
+            if (trimmed.endsWith('.') || trimmed.endsWith('!') || trimmed.endsWith('?')) delay = 500;
+            else if (trimmed.endsWith(',') || trimmed.endsWith(';')) delay = 250;
+            else if (p.includes('\n')) delay = 800;
+            return { text: trimmed, delay };
+        }).filter(p => p.text.length > 0);
+
         State.cursor = doc.cursor || 0;
+        if (State.cursor >= State.phrases.length) State.cursor = 0;
         
         UI.toggleFull(true);
         Engine.play();
@@ -417,32 +493,32 @@ const Engine = {
 
     play: () => {
         window.speechSynthesis.cancel();
-        if(State.cursor >= State.sentences.length) {
+        if(State.cursor >= State.phrases.length) {
             State.playing = false;
             UI.updatePlayer();
             return;
         }
 
-        const rawText = State.sentences[State.cursor].trim();
-        if(!rawText) { State.cursor++; Engine.play(); return; }
-
-        const utterance = new SpeechSynthesisUtterance(rawText);
+        const phrase = State.phrases[State.cursor];
+        const utterance = new SpeechSynthesisUtterance(phrase.text);
         utterance.voice = State.voices[document.getElementById('voice-select').value] || State.voices[0];
         utterance.rate = State.tempo;
 
         utterance.onboundary = (e) => {
-            if(e.name === 'word') UI.syncCaption(rawText, e.charIndex, e.charLength);
+            if(e.name === 'word') UI.syncCaption(phrase.text, e.charIndex, e.charLength);
         };
 
         utterance.onend = () => {
             if(State.playing) {
-                State.cursor++;
-                Engine.persist();
-                Engine.play();
+                // Thread-keepalive execution timeout sequence to mimic real grammar boundaries
+                setTimeout(() => {
+                    State.cursor++;
+                    Engine.persist();
+                    Engine.play();
+                }, phrase.delay);
             }
         };
 
-        // Keep OS active audio thread priority during lock states
         if (BackgroundEngine.audio && BackgroundEngine.audio.paused) {
             BackgroundEngine.audio.play().catch(() => {});
         }
@@ -450,33 +526,36 @@ const Engine = {
         window.speechSynthesis.speak(utterance);
         State.playing = true;
         UI.updatePlayer();
-        BackgroundEngine.syncLockScreen(State.active.title, State.cursor);
+        BackgroundEngine.syncLockscreen(State.active.title, State.cursor, State.phrases.length);
+        
+        // Continuous Proximity Heartbeat Broadcast
+        State.continuity.postMessage({
+            type: 'HEARTBEAT',
+            id: State.active.id,
+            title: State.active.title,
+            cursor: State.cursor,
+            origin: window.location.href
+        });
     },
 
     toggle: () => {
         Haptics.feedback();
         if(State.playing) {
-            window.speechSynthesis.pause();
+            window.speechSynthesis.cancel();
             if (BackgroundEngine.audio) BackgroundEngine.audio.pause();
             State.playing = false;
         } else {
-            if (window.speechSynthesis.paused) {
-                window.speechSynthesis.resume();
-            } else {
-                Engine.play();
-            }
-            if (BackgroundEngine.audio) BackgroundEngine.audio.play().catch(() => {});
-            State.playing = true;
+            Engine.play();
         }
         UI.updatePlayer();
         if (State.active) {
-            BackgroundEngine.syncLockScreen(State.active.title, State.cursor);
+            BackgroundEngine.syncLockscreen(State.active.title, State.cursor, State.phrases.length);
         }
     },
 
     next: () => { 
         Haptics.feedback();
-        State.cursor = Math.min(State.sentences.length - 1, State.cursor + 1); 
+        State.cursor = Math.min(State.phrases.length - 1, State.cursor + 1); 
         Engine.play(); 
     },
     
@@ -488,14 +567,26 @@ const Engine = {
     
     skip: (n) => { 
         Haptics.feedback();
-        State.cursor = Math.max(0, Math.min(State.sentences.length - 1, State.cursor + n)); 
+        State.cursor = Math.max(0, Math.min(State.phrases.length - 1, State.cursor + n)); 
         Engine.play(); 
+    },
+
+    scrub: (e) => {
+        const bar = document.getElementById('scrub-bar');
+        const rect = bar.getBoundingClientRect();
+        const pct = (e.clientX - rect.left) / rect.width;
+        State.cursor = Math.max(0, Math.min(State.phrases.length - 1, Math.floor(pct * State.phrases.length)));
+        Engine.play();
+    },
+
+    updateVoice: () => {
+        if(State.playing) Engine.play();
     },
     
     cycleTempo: () => {
         Haptics.feedback();
-        const rates = [1.0, 1.25, 1.5, 2.0, 0.8];
-        State.tempo = rates[(rates.indexOf(State.tempo) + 1) % rates.length];
+        const steps = [1.0, 1.25, 1.5, 2.0, 0.8];
+        State.tempo = steps[(steps.indexOf(State.tempo) + 1) % steps.length];
         document.getElementById('tempo-ui').textContent = State.tempo + 'x';
         if(State.playing) Engine.play();
     },
@@ -504,7 +595,17 @@ const Engine = {
         const idx = State.lib.findIndex(d => d.id === State.active.id);
         if(idx !== -1) {
             State.lib[idx].cursor = State.cursor;
-            await localforage.setItem('scribe_v4_db', State.lib);
+            await localforage.setItem('scribe_v5_db', State.lib);
+        }
+    },
+
+    acceptHandoff: () => {
+        const data = JSON.parse(localStorage.getItem('scribe_last_handoff'));
+        if(data) {
+            document.getElementById('handoff-banner').classList.remove('visible');
+            Engine.load(data.id);
+            State.cursor = data.cursor;
+            Engine.play();
         }
     }
 };
@@ -525,17 +626,28 @@ const UI = {
 
     populateVoices: () => {
         const sel = document.getElementById('voice-select');
-        // Filter readable voice paths to prevent display overflow in UI HUD select
         sel.innerHTML = State.voices
             .map((v, i) => `<option value="${i}">${v.name.split(' (')[0]}</option>`)
             .join('');
     },
 
     syncCaption: (text, start, len) => {
-        const pre = text.substring(0, start);
-        const word = text.substring(start, start + len);
-        const post = text.substring(start + len);
-        document.getElementById('live-caption').innerHTML = `${pre}<span class="active-word">${word}</span>${post}`;
+        const parent = document.getElementById('live-caption');
+        if (State.settings.bionic) {
+            // High Speed Bionic Reading Processing
+            const words = text.split(" ");
+            const bionicHTML = words.map(w => {
+                const mid = Math.ceil(w.length / 2);
+                return `<b>${w.substring(0, mid)}</b>${w.substring(mid)}`;
+            }).join(" ");
+            parent.innerHTML = `<span class="caption-bionic">${bionicHTML}</span>`;
+        } else {
+            // Audio Session Boundary Word Highlight
+            const pre = text.substring(0, start);
+            const word = text.substring(start, start + len);
+            const post = text.substring(start + len);
+            parent.innerHTML = `${pre}<span class="active-word">${word}</span>${post}`;
+        }
     },
 
     updatePlayer: () => {
@@ -544,12 +656,13 @@ const UI = {
         document.getElementById('play-btn').innerHTML = `<i class="${i}"></i>`;
         document.getElementById('mini-play-btn').innerHTML = `<i class="${mi}"></i>`;
         
-        const pct = Math.round((State.cursor / State.sentences.length) * 100) || 0;
+        const pct = Math.round((State.cursor / State.phrases.length) * 100) || 0;
         document.getElementById('progress-fill').style.width = pct + '%';
-        document.getElementById('player-pos-text').textContent = `SENTENCE ${State.cursor} • ${pct}%`;
+        document.getElementById('player-pos-text').textContent = `PHRASE ${State.cursor} / ${State.phrases.length}`;
+        document.getElementById('player-percent-text').textContent = pct + '%';
         
-        document.getElementById('mini-title').textContent = State.active?.title || 'System Standby';
-        document.getElementById('mini-status').textContent = State.playing ? 'Synthesizing...' : 'Paused';
+        document.getElementById('mini-title').textContent = State.active?.title || 'System Idle';
+        document.getElementById('mini-status').textContent = State.playing ? 'Active Stream' : 'Suspended';
         document.getElementById('player-book-title').textContent = State.active?.title;
     },
 
@@ -567,19 +680,36 @@ const UI = {
         }
     },
 
+    triggerHandoff: (data) => {
+        localStorage.setItem('scribe_last_handoff', JSON.stringify(data));
+        const banner = document.getElementById('handoff-banner');
+        banner.classList.add('visible');
+        setTimeout(() => banner.classList.remove('visible'), 6000);
+    },
+
+    openOptionSheet: () => {
+        const option = confirm("TITAN CONTROL SHEET\n\nPress OK to toggle Bionic Reading Mode\nPress Cancel to configure Sleep Timer");
+        if (option) {
+            State.settings.bionic = !State.settings.bionic;
+            alert(`Bionic Reading Mode: ${State.settings.bionic ? "ENABLED" : "DISABLED"}`);
+        } else {
+            UI.sleepTimer();
+        }
+    },
+
     bindGestures: () => {
         let startY = 0;
-        const area = document.getElementById('gesture-surface');
-        area.addEventListener('touchstart', e => startY = e.touches[0].clientY, {passive: true});
-        area.addEventListener('touchend', e => {
+        const surface = document.getElementById('gesture-surface');
+        surface.addEventListener('touchstart', e => startY = e.touches[0].clientY, {passive: true});
+        surface.addEventListener('touchend', e => {
             const endY = e.changedTouches[0].clientY;
-            if(endY - startY > 100) UI.toggleFull(false);
+            if(endY - startY > 120) UI.toggleFull(false);
         }, {passive: true});
     },
 
     sleepTimer: () => {
         Haptics.feedback();
-        const mins = prompt("SLEEP SCHEDULER: Define countdown minutes:", "30");
+        const mins = prompt("SLEEP TIMEOUT CORE (minutes):", "30");
         if(mins && !isNaN(mins)) {
             setTimeout(() => {
                 window.speechSynthesis.cancel();
@@ -587,18 +717,19 @@ const UI = {
                 State.playing = false;
                 UI.updatePlayer();
                 if (State.active) {
-                    BackgroundEngine.syncLockScreen(State.active.title, State.cursor);
+                    BackgroundEngine.syncLockscreen(State.active.title, State.cursor, State.phrases.length);
                 }
             }, mins * 60000);
+            alert(`System Sleep initiated: Execution shutdown in ${mins} minutes.`);
         }
     }
 };
 
 const Haptics = {
-    feedback: () => { if(navigator.vibrate) navigator.vibrate(10); }
+    feedback: () => { if(navigator.vibrate) navigator.vibrate(12); }
 };
 
-// Injection of Service Worker for completely offline architecture
+// Dynamic client-side Service Worker mapping for absolute offline support
 if('serviceWorker' in navigator) {
     const sw = `self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));`;
     const blob = new Blob([sw], {type: 'text/javascript'});
